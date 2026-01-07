@@ -2,54 +2,32 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { FiChevronRight, FiChevronDown } from 'react-icons/fi'
 import { colorToCss, displayUrl, withAlpha, readableTextColor } from './utils'
 
-const ROOT_FOLDER_TITLE = 'Tab Box'
-const META_BOOKMARK_URL = 'tabbox:meta'
-
-type TabItem = { id: string; title: string; url: string }
-type GroupItem = { id: string; title: string; color: string | null; groupId: number | null; tabs: TabItem[] }
-type WindowItem = { id: string; title: string; windowId: number | null; groups: GroupItem[] }
-
-async function getRootFolder(): Promise<chrome.bookmarks.BookmarkTreeNode | null> {
-  const tree = await chrome.bookmarks.getTree()
-  const stack = [...tree]
-  while (stack.length) {
-    const node = stack.pop()!
-    if (!node.url && node.title === ROOT_FOLDER_TITLE) return node
-    if (node.children) stack.push(...node.children)
-  }
-  return null
-}
+type TabItem = { id: string | number; title: string; url: string }
+type GroupItem = { id: number; title: string; color: string | null; tabs: TabItem[] }
+type WindowItem = { id: number; title: string; groups: GroupItem[] }
 
 async function buildModel(): Promise<WindowItem[]> {
-  const root = await getRootFolder()
-  if (!root) return []
-  const windows = await chrome.bookmarks.getChildren(root.id)
+  const response = await chrome.runtime.sendMessage({ type: 'getStorage' }).catch(() => ({ ok: false }))
+  if (!response.ok || !response.data) return []
+  const data = response.data
   const model: WindowItem[] = []
-  for (const w of windows) {
-    if (w.url) continue
-    const children = await chrome.bookmarks.getChildren(w.id)
-    // Read window metadata first
-    const windowMeta = children.find((x) => x.url === META_BOOKMARK_URL)
-    let windowData: { windowId?: number; title?: string } = {}
-    if (windowMeta) {
-      try { windowData = JSON.parse(windowMeta.title) } catch { }
-    }
-    const windowId = windowData.windowId || parseInt((w.title || '').replace(/[^0-9]/g, ''), 10) || null
-    const windowTitle = windowData.title || w.title || ""
-
+  for (const windowId in data.windows) {
+    const w = data.windows[windowId]
     const groups: GroupItem[] = []
-    for (const c of children) {
-      if (c.url) continue
-      const cc = await chrome.bookmarks.getChildren(c.id)
-      const meta = cc.find((x) => x.url === META_BOOKMARK_URL)
-      let data: Partial<GroupItem & { windowId?: number | null }> = { title: c.title, color: null, groupId: null }
-      if (meta) {
-        try { data = { ...data, ...JSON.parse(meta.title) } } catch { }
-      }
-      const tabs: TabItem[] = cc.filter((x) => x.url && x.url !== META_BOOKMARK_URL).map((x) => ({ id: x.id, title: x.title || x.url!, url: x.url! }))
-      groups.push({ id: c.id, title: data.title || c.title || '', color: (data.color as any) || null, groupId: (data.groupId as any) || null, tabs })
+    for (const groupId in w.groups) {
+      const g = w.groups[groupId]
+      groups.push({
+        id: g.id,
+        title: g.title || '',
+        color: g.color || null,
+        tabs: g.tabs || []
+      })
     }
-    model.push({ id: w.id, title: windowTitle, windowId, groups })
+    model.push({
+      id: w.id,
+      title: w.title || `Window ${w.id}`,
+      groups
+    })
   }
   return model
 }
@@ -66,11 +44,16 @@ export default function App() {
       setModel(m)
       const r = await chrome.runtime.sendMessage({ type: 'getFocusedWindowId' }).catch(() => ({ windowId: null }))
       setFocusedWindowId(r?.windowId ?? null)
-      if (r?.windowId) setExpandedWindows((prev) => ({ ...prev, [String(r.windowId)]: true }))
+      if (r?.windowId) {
+        setExpandedWindows((prev) => {
+          const key = String(r.windowId)
+          return prev[key] !== undefined ? prev : { ...prev, [key]: true }
+        })
+      }
     }
     load()
     const listener = (msg: any) => {
-      if (msg && (msg.type === 'bookmarksChanged' || msg.type === 'windowFocused')) {
+      if (msg && (msg.type === 'storageChanged' || msg.type === 'windowFocused')) {
         load()
       }
     }
@@ -92,8 +75,8 @@ export default function App() {
   const ordered = useMemo(() => {
     const list = filtered.filter((w) => w.groups.length > 0)
     list.sort((a, b) => {
-      const aIsCurrent = a.windowId != null && a.windowId === focusedWindowId
-      const bIsCurrent = b.windowId != null && b.windowId === focusedWindowId
+      const aIsCurrent = a.id === focusedWindowId
+      const bIsCurrent = b.id === focusedWindowId
       if (aIsCurrent && !bIsCurrent) return -1
       if (bIsCurrent && !aIsCurrent) return 1
       return (a.title || '').localeCompare(b.title || '')
@@ -104,19 +87,15 @@ export default function App() {
   const toggleWindow = (id: string) => setExpandedWindows((prev) => ({ ...prev, [id]: !prev[id] }))
 
   const onWindowClick = async (w: WindowItem) => {
-    if (w.windowId) {
-      await chrome.runtime.sendMessage({ type: 'focusWindow', windowId: w.windowId })
-    } else {
-      await chrome.runtime.sendMessage({ type: 'focusWindowFolder', folderId: w.id })
-    }
+    await chrome.runtime.sendMessage({ type: 'focusWindow', windowId: w.id })
   }
 
   const onGroupClick = async (g: GroupItem) => {
-    await chrome.runtime.sendMessage({ type: 'openGroupFolder', folderId: g.id })
+    await chrome.runtime.sendMessage({ type: 'openGroup', groupId: g.id })
   }
 
   const onTabClick = async (t: TabItem) => {
-    await chrome.runtime.sendMessage({ type: 'openTabBookmark', bookmarkId: t.id })
+    await chrome.runtime.sendMessage({ type: 'openTab', url: t.url })
   }
 
   return (
@@ -133,12 +112,12 @@ export default function App() {
       <main className="p-2 overflow-auto">
         <div className="space-y-2 text-sm">
           {ordered.map((w) => {
-            const expanded = !!expandedWindows[String(w.windowId ?? w.id)]
+            const expanded = !!expandedWindows[String(w.id)]
             return (
               <div key={w.id} className="border border-gray-200 dark:border-zinc-800 rounded-md">
                 <div className="flex items-center gap-2 font-semibold cursor-pointer select-none px-2 py-1 rounded-md hover:bg-gray-50 dark:hover:bg-zinc-800/60" onClick={() => onWindowClick(w)}>
                   <button
-                    onClick={(e) => { e.stopPropagation(); toggleWindow(String(w.windowId ?? w.id)) }}
+                    onClick={(e) => { e.stopPropagation(); toggleWindow(String(w.id)) }}
                     className="w-5 h-5 border border-gray-400 dark:border-zinc-600 rounded text-xs text-gray-600 dark:text-gray-300 grid place-items-center bg-white dark:bg-zinc-900">
                     {expanded ? <FiChevronDown size={12} /> : <FiChevronRight size={12} />}
                   </button>

@@ -17,7 +17,6 @@ A side panel extension to persist and manage tab groups via bookmarks. Displays 
 3. Run the build to generate the side panel assets.
    
 	```bash
-	cd /Users/abeall/Development/github/aaronbeall/tab-box
 	npm install
 	npm run build
 	```

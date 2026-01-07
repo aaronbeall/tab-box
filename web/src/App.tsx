@@ -25,7 +25,7 @@ async function buildModel(): Promise<WindowItem[]> {
     }
     model.push({
       id: w.id,
-      title: w.title || `Window ${w.id}`,
+      title: w.title || '',
       groups
     })
   }
@@ -35,25 +35,25 @@ async function buildModel(): Promise<WindowItem[]> {
 export default function App() {
   const [model, setModel] = useState<WindowItem[]>([])
   const [search, setSearch] = useState('')
-  const [focusedWindowId, setFocusedWindowId] = useState<number | null>(null)
+  const [currentWindowId, setCurrentWindowId] = useState<number | undefined>(undefined)
   const [expandedWindows, setExpandedWindows] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
     const load = async () => {
       const m = await buildModel()
       setModel(m)
-      const r = await chrome.runtime.sendMessage({ type: 'getFocusedWindowId' }).catch(() => ({ windowId: null }))
-      setFocusedWindowId(r?.windowId ?? null)
-      if (r?.windowId) {
+      const currentWindow = await chrome.windows.getCurrent()
+      setCurrentWindowId(currentWindow.id)
+      if (currentWindow.id) {
         setExpandedWindows((prev) => {
-          const key = String(r.windowId)
+          const key = String(currentWindow.id)
           return prev[key] !== undefined ? prev : { ...prev, [key]: true }
         })
       }
     }
     load()
     const listener = (msg: any) => {
-      if (msg && (msg.type === 'storageChanged' || msg.type === 'windowFocused')) {
+      if (msg && msg.type === 'storageChanged') {
         load()
       }
     }
@@ -75,14 +75,14 @@ export default function App() {
   const ordered = useMemo(() => {
     const list = filtered.filter((w) => w.groups.length > 0)
     list.sort((a, b) => {
-      const aIsCurrent = a.id === focusedWindowId
-      const bIsCurrent = b.id === focusedWindowId
+      const aIsCurrent = a.id === currentWindowId
+      const bIsCurrent = b.id === currentWindowId
       if (aIsCurrent && !bIsCurrent) return -1
       if (bIsCurrent && !aIsCurrent) return 1
       return (a.title || '').localeCompare(b.title || '')
     })
     return list
-  }, [filtered, focusedWindowId])
+  }, [filtered, currentWindowId])
 
   const toggleWindow = (id: string) => setExpandedWindows((prev) => ({ ...prev, [id]: !prev[id] }))
 
@@ -115,13 +115,32 @@ export default function App() {
             const expanded = !!expandedWindows[String(w.id)]
             return (
               <div key={w.id} className="border border-gray-200 dark:border-zinc-800 rounded-md">
-                <div className="flex items-center gap-2 font-semibold cursor-pointer select-none px-2 py-1 rounded-md hover:bg-gray-50 dark:hover:bg-zinc-800/60" onClick={() => onWindowClick(w)}>
+                <div className="flex items-start gap-2 cursor-pointer select-none px-2 py-1 rounded-md hover:bg-gray-50 dark:hover:bg-zinc-800/60" onClick={() => onWindowClick(w)}>
                   <button
                     onClick={(e) => { e.stopPropagation(); toggleWindow(String(w.id)) }}
-                    className="w-5 h-5 border border-gray-400 dark:border-zinc-600 rounded text-xs text-gray-600 dark:text-gray-300 grid place-items-center bg-white dark:bg-zinc-900">
+                    className="mt-0.5 w-5 h-5 border border-gray-400 dark:border-zinc-600 rounded text-xs text-gray-600 dark:text-gray-300 grid place-items-center shrink-0 bg-white dark:bg-zinc-900">
                     {expanded ? <FiChevronDown size={12} /> : <FiChevronRight size={12} />}
                   </button>
-                  <span className="truncate">{w.title}</span>
+                  {expanded ? (
+                    <span className="font-semibold mt-0.5">{w.groups.length} {w.groups.length === 1 ? 'group' : 'groups'}</span>
+                  ) : (
+                    <div className="flex flex-wrap gap-1.5 min-w-0">
+                      {w.groups.map((g) => {
+                        const base = colorToCss(g.color)
+                        const tagText = readableTextColor(base)
+                        return (
+                          <span
+                            key={g.id}
+                            className="inline-flex items-center justify-center rounded px-1.5 py-0.5 text-[11px] font-semibold min-w-[1.25rem] min-h-[1.25rem] cursor-pointer hover:opacity-80"
+                            style={{ background: base, color: tagText }}
+                            onClick={(e) => { e.stopPropagation(); onGroupClick(g) }}
+                          >
+                            {g.title}
+                          </span>
+                        )
+                      })}
+                    </div>
+                  )}
                 </div>
                 {expanded && (
                   <div className="mt-1 px-2 pb-2 space-y-2">

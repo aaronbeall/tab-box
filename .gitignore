@@ -1,0 +1,12 @@
+# Node / Vite
+node_modules/
+web/dist/
+dist/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# macOS
+.DS_Store

@@ -1,0 +1,27 @@
+{
+  "manifest_version": 3,
+  "name": "Tab Box",
+  "version": "0.1.0",
+  "description": "Persist and manage tab groups via bookmarks, with a side panel tree.",
+  "permissions": [
+    "bookmarks",
+    "tabs",
+    "tabGroups",
+    "storage",
+    "windows",
+    "sidePanel",
+    "favicon"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Tab Box"
+  },
+  "side_panel": {
+    "default_path": "web/dist/index.html"
+  }
+}

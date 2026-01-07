@@ -1,0 +1,28 @@
+{
+  "name": "tab-box-extension",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Chrome MV3 side panel using React + Tailwind",
+  "scripts": {
+    "dev": "vite build --config vite.config.ts --watch",
+    "build": "vite build --config vite.config.ts",
+    "preview": "vite preview --config vite.config.ts"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.270",
+    "@types/react": "^18.2.55",
+    "@types/react-dom": "^18.2.18",
+    "@vitejs/plugin-react": "^4.2.1",
+    "autoprefixer": "^10.4.19",
+    "postcss": "^8.4.35",
+    "tailwindcss": "^3.4.9",
+    "typescript": "^5.5.4",
+    "vite": "^5.0.12"
+  },
+  "dependencies": {
+    "@types/node": "^25.0.3",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-icons": "^5.5.0"
+  }
+}

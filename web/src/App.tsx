@@ -114,7 +114,7 @@ export default function App() {
           {ordered.map((w) => {
             const expanded = !!expandedWindows[String(w.id)]
             return (
-              <div key={w.id} className="border border-gray-200 dark:border-zinc-800 rounded-md">
+              <div key={w.id} className="border border-gray-200 dark:border-zinc-800 rounded-md" title={JSON.stringify(w, null, 2)}>
                 <div className="flex items-start gap-2 cursor-pointer select-none px-2 py-1 rounded-md hover:bg-gray-50 dark:hover:bg-zinc-800/60" onClick={() => onWindowClick(w)}>
                   <button
                     onClick={(e) => { e.stopPropagation(); toggleWindow(String(w.id)) }}
@@ -134,6 +134,7 @@ export default function App() {
                             className="inline-flex items-center justify-center rounded px-1.5 py-0.5 text-[11px] font-semibold min-w-[1.25rem] min-h-[1.25rem] cursor-pointer hover:opacity-80"
                             style={{ background: base, color: tagText }}
                             onClick={(e) => { e.stopPropagation(); onGroupClick(g) }}
+                            title={JSON.stringify(g, null, 2)}
                           >
                             {g.title}
                           </span>
@@ -153,7 +154,7 @@ export default function App() {
                       const borderCol = withAlpha(base, 0.35)
                       const tagText = readableTextColor(base)
                       return (
-                        <div key={g.id} className="rounded-md border" style={{ borderColor: borderCol }}>
+                        <div key={g.id} className="rounded-md border" style={{ borderColor: borderCol }} title={JSON.stringify(g, null, 2)}>
                           <div className="px-2 py-1 rounded-t-md border-b" style={{ background: headerBg, borderColor: borderCol }}>
                             <div
                               className="inline-flex items-center cursor-pointer"

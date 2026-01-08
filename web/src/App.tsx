@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { FiChevronRight, FiChevronDown, FiX, FiTrash2 } from 'react-icons/fi'
+import { FiChevronRight, FiChevronDown, FiX, FiTrash2, FiInfo } from 'react-icons/fi'
 import { colorToCss, displayUrl, withAlpha, readableTextColor } from './utils'
 import type { TabItem, GroupItem, WindowItem, StorageData } from './types'
 
@@ -92,6 +92,20 @@ export default function App() {
 
   const toggleWindow = (key: string) => setExpandedWindows((prev) => ({ ...prev, [key]: !prev[key] }))
 
+  // Detect duplicate group names
+  const duplicateGroupNames = useMemo(() => {
+    const titles = new Map<string, number>()
+    for (const w of ordered) {
+      for (const g of w.groups) {
+        const count = titles.get(g.title) || 0
+        titles.set(g.title, count + 1)
+      }
+    }
+    return Array.from(titles.entries())
+      .filter(([, count]) => count > 1)
+      .map(([title]) => title)
+  }, [ordered])
+
   const onWindowClick = async (w: WindowItem) => {
     await chrome.runtime.sendMessage({ type: 'openWindow', window: w })
   }
@@ -132,6 +146,12 @@ export default function App() {
           placeholder="Search windows, groups, tabs"
           type="search"
         />
+        {duplicateGroupNames.length > 0 && (
+          <div className="mt-2 flex gap-2 p-2 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800/50 rounded text-xs text-blue-800 dark:text-blue-200">
+            <FiInfo size={14} className="shrink-0 mt-0.5" />
+            <span>Duplicate group names detected: <strong>{duplicateGroupNames.join(', ')}</strong>. Unique names help with reliable restoration after Chrome restart.</span>
+          </div>
+        )}
       </header>
       <main className="p-2 overflow-auto">
         <div className="space-y-2 text-sm">
@@ -139,7 +159,7 @@ export default function App() {
             const expanded = !!expandedWindows[w.key]
             const isClosed = w.id === null
             return (
-              <div key={w.key} className={`border border-gray-200 dark:border-zinc-800 rounded-md ${isClosed ? 'opacity-50' : ''}`} title={JSON.stringify(w, null, 2)}>
+              <div key={w.key} className={`border border-gray-200 dark:border-zinc-800 rounded-md ${isClosed ? 'opacity-50' : ''}`}>
                 <div className="flex items-start justify-between cursor-pointer select-none px-2 py-1 rounded-md hover:bg-gray-50 dark:hover:bg-zinc-800/60" onClick={() => onWindowClick(w)}>
                   <div className="flex items-start gap-2">
                     <button
@@ -161,7 +181,6 @@ export default function App() {
                               className={`inline-flex items-center justify-center rounded px-1.5 py-0.5 text-[11px] font-semibold min-w-[1.25rem] min-h-[1.25rem] cursor-pointer hover:opacity-80 ${isGroupClosed ? 'opacity-50' : ''}`}
                               style={{ background: base, color: tagText }}
                               onClick={(e) => { e.stopPropagation(); onGroupClick(g, w) }}
-                              title={JSON.stringify(g, null, 2)}
                             >
                               {g.title}
                             </span>
@@ -227,7 +246,7 @@ export default function App() {
                                 key={t.id}
                                 className="flex items-center gap-2 px-2 py-1 cursor-pointer hover:bg-gray-50 dark:hover:bg-zinc-800/60"
                                 onClick={() => onTabClick(t, g, w)}
-                                title={`${t.title || ''} (${displayUrl(t.url)})`}
+                                title={`${t.title || ''} | ${t.url}`}
                               >
                                 <img
                                   src={`chrome-extension://${chrome.runtime.id}/_favicon/?pageUrl=${encodeURIComponent(t.url)}&size=16`}

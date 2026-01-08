@@ -90,6 +90,19 @@ async function findStoredWindowByGroups(data: StorageData, chromeWindowId: numbe
   return bestMatch ? { window: bestMatch.window, storedWindowId: bestMatch.storedWindowId } : null;
 }
 
+// Helper: Find stored group containing a tab by tab ID
+function findStoredGroupByTabId(data: StorageData, tabId: number): StorageGroup | null {
+  for (const wId in data.windows) {
+    for (const gKey in data.windows[wId].groups) {
+      const g = data.windows[wId].groups[gKey];
+      if (g.tabs.some(t => t.id === tabId)) {
+        return g;
+      }
+    }
+  }
+  return null;
+}
+
 // Helper: Move group to different window in storage
 function moveStoredGroupToWindow(data: StorageData, fromWindowId: number, groupKey: string, toWindowId: number): void {
   const fromWindow = data.windows[fromWindowId];
@@ -110,6 +123,84 @@ function mapTabsToStored(tabs: chrome.tabs.Tab[]): StorageTab[] {
     title: t.title || t.url || 'Untitled',
     url: t.url || ''
   }));
+}
+
+// Helper: Merge Chrome tabs with stored tabs
+// Driven by Chrome tabs: builds new list based on current Chrome state, then adds closed tabs from history
+// Automatically removes duplicate closed tabs by URL
+function mergeStoredTabs(chromeTabs: chrome.tabs.Tab[], storedTabs: StorageTab[]): StorageTab[] {
+  // Map stored tabs by ID for easy lookup
+  const storedTabsById = new Map<number, StorageTab>();
+  for (const storedTab of storedTabs) {
+    if (storedTab.id !== null) {
+      storedTabsById.set(storedTab.id, storedTab);
+    }
+  }
+
+  // Track which stored tabs we've processed
+  const processedStoredIds = new Set<number>();
+
+  // First pass: iterate through chromeTabs, lookup storedTabs as you go
+  const result: StorageTab[] = [];
+  for (const chromeTab of chromeTabs) {
+    const chromeId = chromeTab.id!;
+    const chromeUrl = chromeTab.url || '';
+    const chromeTitle = chromeTab.title || chromeTab.url || 'Untitled';
+
+    // Check if this Chrome tab existed in stored tabs
+    if (storedTabsById.has(chromeId)) {
+      processedStoredIds.add(chromeId);
+    }
+
+    // Add the Chrome tab (always use current Chrome data)
+    result.push({
+      id: chromeId,
+      title: chromeTitle,
+      url: chromeUrl
+    });
+  }
+
+  // Second pass: iterate through remaining stored tabs that weren't updated, add as closed tabs (null id)
+  for (const storedTab of storedTabs) {
+    if (storedTab.id === null || !processedStoredIds.has(storedTab.id)) {
+      // This stored tab wasn't found in chromeTabs, add as closed
+      result.push({
+        ...storedTab,
+        id: null
+      });
+    }
+  }
+
+  // Third pass: deduplicate closed tabs by URL
+  // Keep all open tabs, and max 1 closed tab per URL (only if no open tab exists for that URL)
+  const urlToOpenTab = new Map<string, StorageTab>();
+  const urlToClosedTab = new Map<string, StorageTab>();
+
+  for (const tab of result) {
+    if (tab.id !== null) {
+      // Track open tabs by URL
+      urlToOpenTab.set(tab.url, tab);
+    }
+  }
+
+  const deduplicated: StorageTab[] = [];
+  for (const tab of result) {
+    if (tab.id !== null) {
+      // Keep all open tabs
+      deduplicated.push(tab);
+    } else {
+      // Closed tab - only keep if:
+      // 1. No open tab exists for this URL
+      // 2. We haven't already kept a closed tab for this URL
+      if (!urlToOpenTab.has(tab.url) && !urlToClosedTab.has(tab.url)) {
+        urlToClosedTab.set(tab.url, tab);
+        deduplicated.push(tab);
+      }
+      // else: skip duplicate or shadowed closed tab
+    }
+  }
+
+  return deduplicated;
 }
 
 // Storage sync helpers
@@ -159,6 +250,15 @@ async function reconcileAllData() {
       }
     }
   }
+
+  // Cleanup empty windows
+  for (const wId in data.windows) {
+    const w = data.windows[wId];
+    if (Object.keys(w.groups).length === 0) {
+      delete data.windows[wId];
+    }
+  }
+
   await setStorage(data);
 }
 
@@ -237,13 +337,16 @@ async function syncTabGroup(groupId: number, windowId: number) {
   //   stored = findStoredGroupByTitle(data, group.title || '');
   // }
 
+  // Merge tabs: keep existing stored tabs, update or close them, add new ones
+  const mergedTabs = stored ? mergeStoredTabs(tabs, stored.group.tabs) : mapTabsToStored(tabs);
+
   // Prepare updated group data
   const groupData: StorageGroup = {
     id: groupId,
     title: group.title || '',
     color: group.color || null,
     windowId: windowId,
-    tabs: mapTabsToStored(tabs)
+    tabs: mergedTabs
   };
 
   if (stored) {
@@ -338,9 +441,10 @@ async function focusOrOpenGroup(group: StorageGroup, window: StorageWindow): Pro
   // Ensure window exists
   const windowId = await focusOrOpenWindow(window);
 
-  // Create new group in that window with stored tabs
+  // Create new group in that window with stored tabs (excluding closed/history tabs)
   const createdTabIds: number[] = [];
-  for (const tab of group.tabs) {
+  const tabsToCreate = group.tabs.filter(t => t.id !== null);
+  for (const tab of tabsToCreate) {
     const newTab = await chrome.tabs.create({
       windowId,
       url: tab.url,
@@ -385,10 +489,17 @@ async function focusOrOpenGroup(group: StorageGroup, window: StorageWindow): Pro
   if (stored) {
     stored.group.id = newGroupId;
     stored.group.windowId = windowId;
-    stored.group.tabs = group.tabs.map((t, idx) => ({
-      ...t,
-      id: createdTabIds[idx] ?? null
-    }));
+    // Update tabs: map created tab IDs back to the tabs that were created, keep closed tabs as-is
+    let createdIdx = 0;
+    stored.group.tabs = group.tabs.map((t) => {
+      if (t.id !== null && createdIdx < createdTabIds.length) {
+        // This tab was created, update its ID
+        return { ...t, id: createdTabIds[createdIdx++] };
+      } else {
+        // This tab wasn't created (was closed/history), keep it as-is
+        return { ...t, id: null };
+      }
+    });
 
     // Move to correct window if needed
     if (stored.windowId !== windowId) {
@@ -515,6 +626,16 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         } else {
           sendResponse({ ok: false, error: "Window not found" });
         }
+      } else if (msg && msg.type === "deleteTab" && msg.windowKey && msg.groupKey && msg.tabId !== undefined) {
+        const data = await getStorage();
+        if (data.windows[msg.windowKey] && data.windows[msg.windowKey].groups[msg.groupKey]) {
+          const group = data.windows[msg.windowKey].groups[msg.groupKey];
+          group.tabs = group.tabs.filter(t => t.id !== msg.tabId);
+          await setStorage(data);
+          sendResponse({ ok: true });
+        } else {
+          sendResponse({ ok: false, error: "Group not found" });
+        }
       } else {
         sendResponse({ ok: false, error: "Unknown message" });
       }
@@ -527,6 +648,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
 // Event wiring
 chrome.runtime.onInstalled.addListener(async () => {
+  console.log('[TabBox] Extension installed, reconciling all data');
   // setOptions may not be available in all Chrome versions
   if (chrome.sidePanel && typeof chrome.sidePanel.setOptions === 'function') {
     await chrome.sidePanel.setOptions({ path: "web/dist/index.html", enabled: true }).catch(() => { });
@@ -535,6 +657,7 @@ chrome.runtime.onInstalled.addListener(async () => {
 });
 
 chrome.runtime.onStartup?.addListener(async () => {
+  console.log('[TabBox] Chrome startup, reconciling all data');
   await reconcileAllData();
 });
 
@@ -546,12 +669,14 @@ chrome.action.onClicked.addListener(async (tab) => {
 
 // Chrome events trigger lightweight individual syncs
 chrome.windows.onFocusChanged.addListener(async (windowId) => {
+  console.log('[TabBox] Window focus changed:', windowId);
   if (windowId === chrome.windows.WINDOW_ID_NONE) return;
   // notify panel
   chrome.runtime.sendMessage({ type: "windowFocused", windowId }).catch(() => { });
 });
 
 chrome.windows.onRemoved.addListener(async (windowId) => {
+  console.log('[TabBox] Window removed:', windowId);
   // Mark window and all its groups as closed but keep data
   const data = await getStorage();
   const window = data.windows[windowId];
@@ -567,15 +692,19 @@ chrome.windows.onRemoved.addListener(async (windowId) => {
 
 // Tab Groups sync - sync only the affected group
 chrome.tabGroups.onCreated.addListener(async (group) => {
+  console.log('[TabBox] Tab group created:', group.id, group.title);
   await syncTabGroup(group.id, group.windowId);
 });
 chrome.tabGroups.onUpdated.addListener(async (group) => {
+  console.log('[TabBox] Tab group updated:', group.id, group.title);
   await syncTabGroup(group.id, group.windowId);
 });
 chrome.tabGroups.onMoved.addListener(async (group) => {
+  console.log('[TabBox] Tab group moved:', group.id, 'to window', group.windowId);
   await syncTabGroup(group.id, group.windowId);
 });
 chrome.tabGroups.onRemoved.addListener(async (group) => {
+  console.log('[TabBox] Tab group removed:', group.id);
   // Mark group as closed but keep data
   const data = await getStorage();
   updateGroupEntry(data, group.id, (g) => { g.id = null });
@@ -584,29 +713,33 @@ chrome.tabGroups.onRemoved.addListener(async (group) => {
 
 // Tabs changes - sync the affected group
 chrome.tabs.onCreated.addListener(async (tab) => {
+  console.log('[TabBox] Tab created:', tab.id, 'groupId:', tab.groupId);
   if (tab.groupId && tab.groupId !== -1) await syncTabGroup(tab.groupId, tab.windowId);
 });
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   if (tab.groupId && tab.groupId !== -1 && (changeInfo.url || changeInfo.title)) {
+    console.log('[TabBox] Tab updated:', tabId, 'groupId:', tab.groupId);
     await syncTabGroup(tab.groupId, tab.windowId);
   }
 });
 chrome.tabs.onMoved.addListener(async (tabId, moveInfo) => {
+  console.log('[TabBox] Tab moved:', tabId, 'fromIndex:', moveInfo.fromIndex, 'toIndex:', moveInfo.toIndex);
   const tab = await chrome.tabs.get(tabId);
   if (tab.groupId && tab.groupId !== -1) await syncTabGroup(tab.groupId, moveInfo.windowId);
 });
 chrome.tabs.onDetached.addListener(async (tabId, detachInfo) => {
+  console.log('[TabBox] Tab detached:', tabId, 'from window:', detachInfo.oldWindowId);
   const tab = await chrome.tabs.get(tabId).catch(() => null);
   if (tab && tab.groupId && tab.groupId !== -1) await syncTabGroup(tab.groupId, detachInfo.oldWindowId);
 });
 chrome.tabs.onAttached.addListener(async (tabId, attachInfo) => {
+  console.log('[TabBox] Tab attached:', tabId, 'to window:', attachInfo.newWindowId);
   const tab = await chrome.tabs.get(tabId).catch(() => null);
   if (tab && tab.groupId && tab.groupId !== -1) await syncTabGroup(tab.groupId, attachInfo.newWindowId);
 });
 chrome.tabs.onRemoved.addListener(async (tabId, removeInfo) => {
+  console.log('[TabBox] Tab removed:', tabId);
   const data = await getStorage();
-  const group = Object.values(data.windows)
-    .flatMap(w => Object.values(w.groups))
-    .find(g => g.tabs.some(t => t.id === tabId));
+  const group = findStoredGroupByTabId(data, tabId);
   if (group) await syncTabGroup(group.id!, removeInfo.windowId);
 });

@@ -77,7 +77,17 @@ export default function App() {
       if (bIsCurrent && !aIsCurrent) return 1
       return (a.title || '').localeCompare(b.title || '')
     })
-    return list
+    // Sort groups within each window: open groups first, then closed groups
+    return list.map(w => ({
+      ...w,
+      groups: [...w.groups].sort((a, b) => {
+        const aIsOpen = a.id !== null
+        const bIsOpen = b.id !== null
+        if (aIsOpen && !bIsOpen) return -1
+        if (bIsOpen && !aIsOpen) return 1
+        return 0
+      })
+    }))
   }, [filtered, currentWindowId])
 
   const toggleWindow = (key: string) => setExpandedWindows((prev) => ({ ...prev, [key]: !prev[key] }))
@@ -125,10 +135,11 @@ export default function App() {
                       {w.groups.map((g) => {
                         const base = colorToCss(g.color)
                         const tagText = readableTextColor(base)
+                        const isGroupClosed = !isClosed && g.id === null
                         return (
                           <span
                             key={g.key}
-                            className="inline-flex items-center justify-center rounded px-1.5 py-0.5 text-[11px] font-semibold min-w-[1.25rem] min-h-[1.25rem] cursor-pointer hover:opacity-80"
+                            className={`inline-flex items-center justify-center rounded px-1.5 py-0.5 text-[11px] font-semibold min-w-[1.25rem] min-h-[1.25rem] cursor-pointer hover:opacity-80 ${isGroupClosed ? 'opacity-50' : ''}`}
                             style={{ background: base, color: tagText }}
                             onClick={(e) => { e.stopPropagation(); onGroupClick(g, w) }}
                             title={JSON.stringify(g, null, 2)}
@@ -150,9 +161,9 @@ export default function App() {
                       const headerBg = withAlpha(base, 0.18)
                       const borderCol = withAlpha(base, 0.35)
                       const tagText = readableTextColor(base)
-                      const isClosed = g.id === null
+                      const isGroupClosedInOpenWindow = !isClosed && g.id === null
                       return (
-                        <div key={g.key} className={`rounded-md border ${isClosed ? 'opacity-50' : ''}`} style={{ borderColor: borderCol }} title={JSON.stringify(g, null, 2)}>
+                        <div key={g.key} className={`rounded-md border ${isGroupClosedInOpenWindow ? 'opacity-50' : ''}`} style={{ borderColor: borderCol }} title={JSON.stringify(g, null, 2)}>
                           <div className="px-2 py-1 rounded-t-md border-b" style={{ background: headerBg, borderColor: borderCol }}>
                             <div
                               className="inline-flex items-center cursor-pointer"

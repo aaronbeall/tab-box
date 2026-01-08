@@ -1,30 +1,26 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { FiChevronRight, FiChevronDown } from 'react-icons/fi'
 import { colorToCss, displayUrl, withAlpha, readableTextColor } from './utils'
-
-type TabItem = { id: string | number; title: string; url: string }
-type GroupItem = { id: number; title: string; color: string | null; tabs: TabItem[] }
-type WindowItem = { id: number; title: string; groups: GroupItem[] }
+import type { TabItem, GroupItem, WindowItem, StorageData } from './types'
 
 async function buildModel(): Promise<WindowItem[]> {
   const response = await chrome.runtime.sendMessage({ type: 'getStorage' }).catch(() => ({ ok: false }))
   if (!response.ok || !response.data) return []
-  const data = response.data
+  const data = response.data as StorageData;
   const model: WindowItem[] = []
-  for (const windowId in data.windows) {
-    const w = data.windows[windowId]
+  for (const windowKey in data.windows) {
+    const w = data.windows[windowKey]
     const groups: GroupItem[] = []
-    for (const groupId in w.groups) {
-      const g = w.groups[groupId]
+    for (const groupKey in w.groups) {
+      const g = w.groups[groupKey]
       groups.push({
-        id: g.id,
-        title: g.title || '',
-        color: g.color || null,
-        tabs: g.tabs || []
-      })
+        ...g,
+        key: groupKey
+      });
     }
     model.push({
       id: w.id,
+      key: windowKey,
       title: w.title || '',
       groups
     })
@@ -84,18 +80,18 @@ export default function App() {
     return list
   }, [filtered, currentWindowId])
 
-  const toggleWindow = (id: string) => setExpandedWindows((prev) => ({ ...prev, [id]: !prev[id] }))
+  const toggleWindow = (key: string) => setExpandedWindows((prev) => ({ ...prev, [key]: !prev[key] }))
 
   const onWindowClick = async (w: WindowItem) => {
-    await chrome.runtime.sendMessage({ type: 'focusWindow', windowId: w.id })
+    await chrome.runtime.sendMessage({ type: 'openWindow', window: w })
   }
 
-  const onGroupClick = async (g: GroupItem) => {
-    await chrome.runtime.sendMessage({ type: 'openGroup', groupId: g.id })
+  const onGroupClick = async (g: GroupItem, w: WindowItem) => {
+    await chrome.runtime.sendMessage({ type: 'openGroup', group: g, window: w })
   }
 
-  const onTabClick = async (t: TabItem) => {
-    await chrome.runtime.sendMessage({ type: 'openTab', url: t.url })
+  const onTabClick = async (t: TabItem, g: GroupItem, w: WindowItem) => {
+    await chrome.runtime.sendMessage({ type: 'openTab', tab: t, group: g, window: w })
   }
 
   return (
@@ -112,12 +108,13 @@ export default function App() {
       <main className="p-2 overflow-auto">
         <div className="space-y-2 text-sm">
           {ordered.map((w) => {
-            const expanded = !!expandedWindows[String(w.id)]
+            const expanded = !!expandedWindows[w.key]
+            const isClosed = w.id === null
             return (
-              <div key={w.id} className="border border-gray-200 dark:border-zinc-800 rounded-md" title={JSON.stringify(w, null, 2)}>
+              <div key={w.key} className={`border border-gray-200 dark:border-zinc-800 rounded-md ${isClosed ? 'opacity-50' : ''}`} title={JSON.stringify(w, null, 2)}>
                 <div className="flex items-start gap-2 cursor-pointer select-none px-2 py-1 rounded-md hover:bg-gray-50 dark:hover:bg-zinc-800/60" onClick={() => onWindowClick(w)}>
                   <button
-                    onClick={(e) => { e.stopPropagation(); toggleWindow(String(w.id)) }}
+                    onClick={(e) => { e.stopPropagation(); toggleWindow(w.key) }}
                     className="mt-0.5 w-5 h-5 border border-gray-400 dark:border-zinc-600 rounded text-xs text-gray-600 dark:text-gray-300 grid place-items-center shrink-0 bg-white dark:bg-zinc-900">
                     {expanded ? <FiChevronDown size={12} /> : <FiChevronRight size={12} />}
                   </button>
@@ -130,10 +127,10 @@ export default function App() {
                         const tagText = readableTextColor(base)
                         return (
                           <span
-                            key={g.id}
+                            key={g.key}
                             className="inline-flex items-center justify-center rounded px-1.5 py-0.5 text-[11px] font-semibold min-w-[1.25rem] min-h-[1.25rem] cursor-pointer hover:opacity-80"
                             style={{ background: base, color: tagText }}
-                            onClick={(e) => { e.stopPropagation(); onGroupClick(g) }}
+                            onClick={(e) => { e.stopPropagation(); onGroupClick(g, w) }}
                             title={JSON.stringify(g, null, 2)}
                           >
                             {g.title}
@@ -153,12 +150,13 @@ export default function App() {
                       const headerBg = withAlpha(base, 0.18)
                       const borderCol = withAlpha(base, 0.35)
                       const tagText = readableTextColor(base)
+                      const isClosed = g.id === null
                       return (
-                        <div key={g.id} className="rounded-md border" style={{ borderColor: borderCol }} title={JSON.stringify(g, null, 2)}>
+                        <div key={g.key} className={`rounded-md border ${isClosed ? 'opacity-50' : ''}`} style={{ borderColor: borderCol }} title={JSON.stringify(g, null, 2)}>
                           <div className="px-2 py-1 rounded-t-md border-b" style={{ background: headerBg, borderColor: borderCol }}>
                             <div
                               className="inline-flex items-center cursor-pointer"
-                              onClick={() => onGroupClick(g)}
+                              onClick={() => onGroupClick(g, w)}
                             >
                               <span
                                 className="inline-flex items-center justify-center rounded-md px-2 py-0.5 text-xs font-semibold min-w-[1.5rem] min-h-[1.5rem]"
@@ -173,7 +171,7 @@ export default function App() {
                               <div
                                 key={t.id}
                                 className="flex items-center gap-2 px-2 py-1 cursor-pointer hover:bg-gray-50 dark:hover:bg-zinc-800/60"
-                                onClick={() => onTabClick(t)}
+                                onClick={() => onTabClick(t, g, w)}
                                 title={`${t.title || ''} (${displayUrl(t.url)})`}
                               >
                                 <img

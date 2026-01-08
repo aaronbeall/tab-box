@@ -16,7 +16,7 @@
     "<all_urls>"
   ],
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "web/dist/background.js"
   },
   "action": {
     "default_title": "Tab Box"

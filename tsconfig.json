@@ -4,7 +4,8 @@
     "useDefineForClassFields": true,
     "lib": [
       "ES2020",
-      "DOM"
+      "DOM",
+      "DOM.Iterable"
     ],
     "module": "ESNext",
     "skipLibCheck": true,
@@ -21,6 +22,7 @@
   },
   "include": [
     "web/src",
-    "web/index.html"
+    "web/index.html",
+    "background.ts"
   ]
 }

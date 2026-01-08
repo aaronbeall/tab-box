@@ -486,6 +486,35 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       } else if (msg && msg.type === "getStorage") {
         const data = await getStorage();
         sendResponse({ ok: true, data });
+      } else if (msg && msg.type === "closeGroup" && msg.groupId) {
+        try {
+          const tabs = await chrome.tabs.query({ groupId: msg.groupId });
+          const tabIds = tabs.map(t => t.id!);
+          if (tabIds.length > 0) {
+            await chrome.tabs.remove(tabIds);
+          }
+          sendResponse({ ok: true });
+        } catch (e) {
+          sendResponse({ ok: false, error: String(e) });
+        }
+      } else if (msg && msg.type === "deleteGroup" && msg.windowKey && msg.groupKey) {
+        const data = await getStorage();
+        if (data.windows[msg.windowKey] && data.windows[msg.windowKey].groups[msg.groupKey]) {
+          delete data.windows[msg.windowKey].groups[msg.groupKey];
+          await setStorage(data);
+          sendResponse({ ok: true });
+        } else {
+          sendResponse({ ok: false, error: "Group not found" });
+        }
+      } else if (msg && msg.type === "deleteWindow" && msg.windowKey) {
+        const data = await getStorage();
+        if (data.windows[msg.windowKey]) {
+          delete data.windows[msg.windowKey];
+          await setStorage(data);
+          sendResponse({ ok: true });
+        } else {
+          sendResponse({ ok: false, error: "Window not found" });
+        }
       } else {
         sendResponse({ ok: false, error: "Unknown message" });
       }

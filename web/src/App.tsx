@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { FiChevronRight, FiChevronDown } from 'react-icons/fi'
+import { FiChevronRight, FiChevronDown, FiX, FiTrash2 } from 'react-icons/fi'
 import { colorToCss, displayUrl, withAlpha, readableTextColor } from './utils'
 import type { TabItem, GroupItem, WindowItem, StorageData } from './types'
 
@@ -104,6 +104,24 @@ export default function App() {
     await chrome.runtime.sendMessage({ type: 'openTab', tab: t, group: g, window: w })
   }
 
+  const onCloseGroup = async (e: React.MouseEvent, groupId: number) => {
+    e.stopPropagation()
+    if (!confirm('Close this tab group?')) return
+    await chrome.runtime.sendMessage({ type: 'closeGroup', groupId })
+  }
+
+  const onDeleteGroup = async (e: React.MouseEvent, w: WindowItem, g: GroupItem) => {
+    e.stopPropagation()
+    if (!confirm('Delete this group and all its data?')) return
+    await chrome.runtime.sendMessage({ type: 'deleteGroup', windowKey: w.key, groupKey: g.key })
+  }
+
+  const onDeleteWindow = async (e: React.MouseEvent, w: WindowItem) => {
+    e.stopPropagation()
+    if (!confirm('Delete this window and all its groups?')) return
+    await chrome.runtime.sendMessage({ type: 'deleteWindow', windowKey: w.key })
+  }
+
   return (
     <div className="flex flex-col h-screen bg-white dark:bg-zinc-900 text-gray-900 dark:text-gray-100">
       <header className="p-2 border-b border-gray-200 dark:border-zinc-800">
@@ -122,33 +140,42 @@ export default function App() {
             const isClosed = w.id === null
             return (
               <div key={w.key} className={`border border-gray-200 dark:border-zinc-800 rounded-md ${isClosed ? 'opacity-50' : ''}`} title={JSON.stringify(w, null, 2)}>
-                <div className="flex items-start gap-2 cursor-pointer select-none px-2 py-1 rounded-md hover:bg-gray-50 dark:hover:bg-zinc-800/60" onClick={() => onWindowClick(w)}>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); toggleWindow(w.key) }}
-                    className="mt-0.5 w-5 h-5 border border-gray-400 dark:border-zinc-600 rounded text-xs text-gray-600 dark:text-gray-300 grid place-items-center shrink-0 bg-white dark:bg-zinc-900">
-                    {expanded ? <FiChevronDown size={12} /> : <FiChevronRight size={12} />}
-                  </button>
-                  {expanded ? (
-                    <span className="font-semibold mt-0.5">{w.groups.length} {w.groups.length === 1 ? 'group' : 'groups'}</span>
-                  ) : (
-                    <div className="flex flex-wrap gap-1.5 min-w-0">
-                      {w.groups.map((g) => {
-                        const base = colorToCss(g.color)
-                        const tagText = readableTextColor(base)
-                        const isGroupClosed = !isClosed && g.id === null
-                        return (
-                          <span
-                            key={g.key}
-                            className={`inline-flex items-center justify-center rounded px-1.5 py-0.5 text-[11px] font-semibold min-w-[1.25rem] min-h-[1.25rem] cursor-pointer hover:opacity-80 ${isGroupClosed ? 'opacity-50' : ''}`}
-                            style={{ background: base, color: tagText }}
-                            onClick={(e) => { e.stopPropagation(); onGroupClick(g, w) }}
-                            title={JSON.stringify(g, null, 2)}
-                          >
-                            {g.title}
-                          </span>
-                        )
-                      })}
-                    </div>
+                <div className="flex items-start justify-between cursor-pointer select-none px-2 py-1 rounded-md hover:bg-gray-50 dark:hover:bg-zinc-800/60" onClick={() => onWindowClick(w)}>
+                  <div className="flex items-start gap-2">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); toggleWindow(w.key) }}
+                      className="mt-0.5 w-5 h-5 border border-gray-400 dark:border-zinc-600 rounded text-xs text-gray-600 dark:text-gray-300 grid place-items-center shrink-0 bg-white dark:bg-zinc-900">
+                      {expanded ? <FiChevronDown size={12} /> : <FiChevronRight size={12} />}
+                    </button>
+                    {expanded ? (
+                      <span className="font-semibold mt-0.5">{w.groups.length} {w.groups.length === 1 ? 'group' : 'groups'}</span>
+                    ) : (
+                      <div className="flex flex-wrap gap-1.5 min-w-0">
+                        {w.groups.map((g) => {
+                          const base = colorToCss(g.color)
+                          const tagText = readableTextColor(base)
+                          const isGroupClosed = !isClosed && g.id === null
+                          return (
+                            <span
+                              key={g.key}
+                              className={`inline-flex items-center justify-center rounded px-1.5 py-0.5 text-[11px] font-semibold min-w-[1.25rem] min-h-[1.25rem] cursor-pointer hover:opacity-80 ${isGroupClosed ? 'opacity-50' : ''}`}
+                              style={{ background: base, color: tagText }}
+                              onClick={(e) => { e.stopPropagation(); onGroupClick(g, w) }}
+                              title={JSON.stringify(g, null, 2)}
+                            >
+                              {g.title}
+                            </span>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                  {isClosed && (
+                    <button
+                      onClick={(e) => onDeleteWindow(e, w)}
+                      className="mt-0.5 w-5 h-5 text-gray-600 dark:text-gray-300 hover:text-red-600 dark:hover:text-red-400 flex items-center justify-center shrink-0">
+                      <FiTrash2 size={16} />
+                    </button>
                   )}
                 </div>
                 {expanded && (
@@ -164,9 +191,9 @@ export default function App() {
                       const isGroupClosedInOpenWindow = !isClosed && g.id === null
                       return (
                         <div key={g.key} className={`rounded-md border ${isGroupClosedInOpenWindow ? 'opacity-50' : ''}`} style={{ borderColor: borderCol }} title={JSON.stringify(g, null, 2)}>
-                          <div className="px-2 py-1 rounded-t-md border-b" style={{ background: headerBg, borderColor: borderCol }}>
+                          <div className="flex items-center justify-between px-2 py-1 rounded-t-md border-b" style={{ background: headerBg, borderColor: borderCol }}>
                             <div
-                              className="inline-flex items-center cursor-pointer"
+                              className="inline-flex items-center cursor-pointer flex-1"
                               onClick={() => onGroupClick(g, w)}
                             >
                               <span
@@ -176,6 +203,23 @@ export default function App() {
                                 {g.title}
                               </span>
                             </div>
+                            {g.id !== null ? (
+                              <button
+                                onClick={(e) => onCloseGroup(e, g.id!)}
+                                className="w-5 h-5 text-gray-600 dark:text-gray-300 hover:text-red-600 dark:hover:text-red-400 flex items-center justify-center shrink-0 -mr-1"
+                                title="Close group"
+                              >
+                                <FiX size={16} />
+                              </button>
+                            ) : (
+                              <button
+                                onClick={(e) => onDeleteGroup(e, w, g)}
+                                className="w-5 h-5 text-gray-600 dark:text-gray-300 hover:text-red-600 dark:hover:text-red-400 flex items-center justify-center shrink-0 -mr-1"
+                                title="Delete group"
+                              >
+                                <FiTrash2 size={16} />
+                              </button>
+                            )}
                           </div>
                           <div className="divide-y divide-gray-200 dark:divide-zinc-800">
                             {g.tabs.map((t) => (

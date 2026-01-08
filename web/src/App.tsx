@@ -75,7 +75,7 @@ export default function App() {
     }).filter(Boolean) as WindowItem[]
   }, [q, model, searchClosedTabs])
 
-  // Order: current window at top, then by title; filter out empty windows
+  // Order: current window at top, then open windows, then closed windows; filter out empty windows
   const ordered = useMemo(() => {
     const list = filtered.filter((w) => w.groups.length > 0)
     list.sort((a, b) => {
@@ -83,6 +83,14 @@ export default function App() {
       const bIsCurrent = b.id === currentWindowId
       if (aIsCurrent && !bIsCurrent) return -1
       if (bIsCurrent && !aIsCurrent) return 1
+      
+      // Then sort by open/closed status
+      const aIsOpen = a.id !== null
+      const bIsOpen = b.id !== null
+      if (aIsOpen && !bIsOpen) return -1
+      if (bIsOpen && !aIsOpen) return 1
+      
+      // Finally sort by title
       return (a.title || '').localeCompare(b.title || '')
     })
     // Sort groups within each window: open groups first, then closed groups
@@ -206,7 +214,7 @@ export default function App() {
                   </div>
                 )}
                 {(!isClosed || expandedClosedWindows) && (
-                  <div className={`border border-gray-200 dark:border-zinc-800 rounded-md ${isClosed ? 'opacity-50 bg-gray-50 dark:bg-zinc-900/30' : ''}`}>
+                  <div className={`border border-gray-200 dark:border-zinc-800 rounded-md ${isClosed ? 'opacity-50 bg-gray-50 dark:bg-zinc-900/30' : ''}`} title={JSON.stringify(w)}>
                     <div className="flex items-start justify-between cursor-pointer select-none px-2 py-1 rounded-md hover:bg-gray-50 dark:hover:bg-zinc-800/60" onClick={() => onWindowClick(w)}>
                       <div className="flex items-start gap-2">
                         <button

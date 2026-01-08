@@ -245,7 +245,7 @@ export default function App() {
                       )}
                     </div>
                     {expanded && (
-                      <div className="border-t border-gray-200 dark:border-zinc-800">
+                      <div className="border-t border-gray-200 dark:border-zinc-800 space-y-2 px-2 py-2">
                         {w.groups.map((g) => {
                           const base = colorToCss(g.color)
                           const headerBg = withAlpha(base, 0.18)

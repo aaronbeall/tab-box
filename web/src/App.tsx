@@ -83,13 +83,13 @@ export default function App() {
       const bIsCurrent = b.id === currentWindowId
       if (aIsCurrent && !bIsCurrent) return -1
       if (bIsCurrent && !aIsCurrent) return 1
-      
+
       // Then sort by open/closed status
       const aIsOpen = a.id !== null
       const bIsOpen = b.id !== null
       if (aIsOpen && !bIsOpen) return -1
       if (bIsOpen && !aIsOpen) return 1
-      
+
       // Finally sort by title
       return (a.title || '').localeCompare(b.title || '')
     })
@@ -158,6 +158,12 @@ export default function App() {
     await chrome.runtime.sendMessage({ type: 'deleteTab', windowKey: w.key, groupKey: g.key, tabId })
   }
 
+  const onDeleteClosedTabs = async (e: React.MouseEvent, w: WindowItem, g: GroupItem) => {
+    e.stopPropagation()
+    if (!confirm('Delete all closed tabs in this group?')) return
+    await chrome.runtime.sendMessage({ type: 'deleteClosedTabs', windowKey: w.key, groupKey: g.key })
+  }
+
   return (
     <div className="flex flex-col h-screen bg-white dark:bg-zinc-900 text-gray-900 dark:text-gray-100">
       <header className="p-2 border-b border-gray-200 dark:border-zinc-800">
@@ -214,7 +220,7 @@ export default function App() {
                   </div>
                 )}
                 {(!isClosed || expandedClosedWindows) && (
-                  <div className={`border border-gray-200 dark:border-zinc-800 rounded-md ${isClosed ? 'opacity-50 bg-gray-50 dark:bg-zinc-900/30' : ''}`} title={JSON.stringify(w)}>
+                  <div className={`border border-gray-200 dark:border-zinc-800 rounded-md ${isClosed ? 'opacity-50 bg-gray-50 dark:bg-zinc-900/30' : ''}`}>
                     <div className="flex items-start justify-between cursor-pointer select-none px-2 py-1 rounded-md hover:bg-gray-50 dark:hover:bg-zinc-800/60" onClick={() => onWindowClick(w)}>
                       <div className="flex items-start gap-2">
                         <button
@@ -353,6 +359,15 @@ export default function App() {
                                                 </button>
                                               </div>
                                             ))}
+                                            <div className="h-px bg-gray-200 dark:bg-zinc-800" />
+                                            <div
+                                              className="flex items-center gap-2 px-2 py-1 text-xs text-red-600 dark:text-red-400 cursor-pointer hover:bg-gray-100 dark:hover:bg-zinc-800/40"
+                                              onClick={(e) => onDeleteClosedTabs(e, w, g)}
+                                              title="Clear all closed tabs"
+                                            >
+                                              <FiTrash2 size={12} />
+                                              <span>Clear history</span>
+                                            </div>
                                           </div>
                                         )}
                                       </div>

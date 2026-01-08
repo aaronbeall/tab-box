@@ -205,7 +205,7 @@ function mergeStoredTabs(chromeTabs: chrome.tabs.Tab[], storedTabs: StorageTab[]
 
 // Storage sync helpers
 
-async function reconcileAllData() {
+async function reconcileAllWindows() {
   // Sync all current windows first
   const windows = await chrome.windows.getAll({ populate: true });
   for (const win of windows) {
@@ -260,6 +260,81 @@ async function reconcileAllData() {
   }
 
   await setStorage(data);
+}
+
+/**
+ * Reconcile a single window: mark closed if not in Chrome, 
+ * sync its groups if open, and mark any missing groups as closed
+ */
+async function reconcileWindow(window: StorageWindow) {
+  if (!window.id) {
+    // Window is already closed, just ensure all groups are marked as closed
+    for (const gKey in window.groups) {
+      window.groups[gKey].id = null;
+    }
+    const data = await getStorage();
+    // Find this window in storage and update it
+    for (const wId in data.windows) {
+      if (data.windows[wId] === window) {
+        data.windows[wId] = window;
+        break;
+      }
+    }
+    await setStorage(data);
+    return;
+  }
+
+  const originalWindowId = window.id; // Store original ID for lookups
+
+  try {
+    await chrome.windows.get(window.id);
+
+    // Window exists in Chrome, sync all its tab groups and mark closed ones
+    const chromeGroups = await chrome.tabGroups.query({ windowId: window.id });
+    const chromeGroupIds = new Set(chromeGroups.map(g => g.id));
+
+    // Sync each Chrome group
+    for (const group of chromeGroups) {
+      await syncTabGroup(group.id, window.id);
+    }
+
+    // Re-fetch data after syncing (syncTabGroup modifies storage)
+    const updatedData = await getStorage();
+    // Find this window in storage
+    let updatedWindow: StorageWindow | undefined;
+    for (const wId in updatedData.windows) {
+      if (parseInt(wId) === originalWindowId) {
+        updatedWindow = updatedData.windows[wId];
+        break;
+      }
+    }
+
+    if (updatedWindow) {
+      // Mark stored groups that don't exist in Chrome as closed
+      for (const gKey in updatedWindow.groups) {
+        const g = updatedWindow.groups[gKey];
+        if (g.id !== null && !chromeGroupIds.has(g.id)) {
+          g.id = null;
+        }
+      }
+      await setStorage(updatedData);
+    }
+  } catch {
+    // Window doesn't exist in Chrome, mark it and all groups as closed
+    window.id = null;
+    for (const gKey in window.groups) {
+      window.groups[gKey].id = null;
+    }
+    const data = await getStorage();
+    // Find this window in storage and update it
+    for (const wId in data.windows) {
+      if (parseInt(wId) === originalWindowId) {
+        data.windows[wId] = window;
+        break;
+      }
+    }
+    await setStorage(data);
+  }
 }
 
 /**
@@ -318,7 +393,7 @@ async function syncTabGroup(groupId: number, windowId: number) {
   const tabs = await chrome.tabs.query({ groupId });
   const data = await getStorage();
 
-  // Ensure window exists
+  // Ensure window exists -- should exist by this point, maybe timing issue when detaching groups?
   if (!data.windows[windowId]) {
     await syncWindow(windowId);
     return syncTabGroup(groupId, windowId); // Retry after syncing window
@@ -626,6 +701,16 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         } else {
           sendResponse({ ok: false, error: "Window not found" });
         }
+      } else if (msg && msg.type === "deleteClosedTabs" && msg.windowKey && msg.groupKey) {
+        const data = await getStorage();
+        if (data.windows[msg.windowKey] && data.windows[msg.windowKey].groups[msg.groupKey]) {
+          const group = data.windows[msg.windowKey].groups[msg.groupKey];
+          group.tabs = group.tabs.filter(t => t.id !== null);
+          await setStorage(data);
+          sendResponse({ ok: true });
+        } else {
+          sendResponse({ ok: false, error: "Group not found" });
+        }
       } else if (msg && msg.type === "deleteTab" && msg.windowKey && msg.groupKey && msg.tabId !== undefined) {
         const data = await getStorage();
         if (data.windows[msg.windowKey] && data.windows[msg.windowKey].groups[msg.groupKey]) {
@@ -653,12 +738,12 @@ chrome.runtime.onInstalled.addListener(async () => {
   if (chrome.sidePanel && typeof chrome.sidePanel.setOptions === 'function') {
     await chrome.sidePanel.setOptions({ path: "web/dist/index.html", enabled: true }).catch(() => { });
   }
-  await reconcileAllData();
+  await reconcileAllWindows();
 });
 
 chrome.runtime.onStartup?.addListener(async () => {
   console.log('[TabBox] Chrome startup, reconciling all data');
-  await reconcileAllData();
+  await reconcileAllWindows();
 });
 
 chrome.action.onClicked.addListener(async (tab) => {

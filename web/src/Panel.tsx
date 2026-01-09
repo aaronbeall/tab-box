@@ -32,7 +32,7 @@ async function buildModel(): Promise<WindowItem[]> {
   return model
 }
 
-export default function App() {
+export default function Panel() {
   const [model, setModel] = useState<WindowItem[]>([])
   const [search, setSearch] = useState('')
   const [currentWindowId, setCurrentWindowId] = useState<number | undefined>(undefined)

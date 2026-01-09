@@ -37,6 +37,7 @@ export default function App() {
   const [search, setSearch] = useState('')
   const [currentWindowId, setCurrentWindowId] = useState<number | undefined>(undefined)
   const [expandedWindows, setExpandedWindows] = useState<Record<string, boolean>>({})
+  const [searchAllWindows, setSearchAllWindows] = useState(true)
   const [searchClosedTabs, setSearchClosedTabs] = useState(false)
   const [expandedClosedWindows, setExpandedClosedWindows] = useState(false)
 
@@ -67,6 +68,11 @@ export default function App() {
   const filtered = useMemo(() => {
     if (!q) return model
     return model.map((w) => {
+      // Filter windows if searchAllWindows is false - only include current window
+      if (!searchAllWindows && w.id !== currentWindowId) {
+        return null
+      }
+
       const wg = w.groups.filter((g) => {
         const groupMatches = (g.title || '').toLowerCase().includes(q)
         const openTabsMatch = g.tabs.filter(t => t.id !== null).some((t) => (t.title || '').toLowerCase().includes(q) || (t.url || '').toLowerCase().includes(q))
@@ -76,7 +82,7 @@ export default function App() {
       const matchWindow = (w.name || '').toLowerCase().includes(q)
       return matchWindow || wg.length ? { ...w, groups: wg } : null
     }).filter(Boolean) as WindowItem[]
-  }, [q, model, searchClosedTabs])
+  }, [q, model, searchAllWindows, searchClosedTabs])
 
   // Order: current window at top, then open windows, then closed windows; filter out empty windows
   const ordered = useMemo(() => {
@@ -185,12 +191,21 @@ export default function App() {
           type="search"
         />
         {q && (
-          <div className="mt-2 flex items-center gap-2">
-            <Switch
-              checked={searchClosedTabs}
-              onChange={(e) => setSearchClosedTabs(e.target.checked)}
-              label="Include closed tabs"
-            />
+          <div className="mt-2 flex flex-col gap-2">
+            <div className="flex items-center gap-2">
+              <Switch
+                checked={searchAllWindows}
+                onChange={(e) => setSearchAllWindows(e.target.checked)}
+                label="All Windows"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <Switch
+                checked={searchClosedTabs}
+                onChange={(e) => setSearchClosedTabs(e.target.checked)}
+                label="Closed Tabs"
+              />
+            </div>
           </div>
         )}
         {duplicateGroupNames.length > 0 && (

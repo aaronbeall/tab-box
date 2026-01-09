@@ -420,6 +420,7 @@ async function syncTabGroup(groupId: number, windowId: number) {
     title: group.title || '',
     color: group.color || null,
     windowId: windowId,
+    collapsed: group.collapsed,
     tabs: mergedTabs
   };
 

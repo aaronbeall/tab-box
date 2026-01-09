@@ -37,6 +37,7 @@ export default function App() {
   const [search, setSearch] = useState('')
   const [currentWindowId, setCurrentWindowId] = useState<number | undefined>(undefined)
   const [expandedWindows, setExpandedWindows] = useState<Record<string, boolean>>({})
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
   const [searchAllWindows, setSearchAllWindows] = useState(true)
   const [searchClosedTabs, setSearchClosedTabs] = useState(false)
   const [expandedClosedWindows, setExpandedClosedWindows] = useState(false)
@@ -115,7 +116,21 @@ export default function App() {
     }))
   }, [filtered, currentWindowId])
 
-  const toggleWindow = (key: string) => setExpandedWindows((prev) => ({ ...prev, [key]: !prev[key] }))
+  const toggleWindow = (key: string) => {
+    setExpandedWindows((prev) => ({ ...prev, [key]: !prev[key] }))
+    // Clear group expanded overrides when collapsing window
+    if (expandedWindows[key]) {
+      setExpandedGroups((prev) => {
+        const next = { ...prev }
+        for (const g of model.find(w => w.key === key)?.groups || []) {
+          delete next[g.key]
+        }
+        return next
+      })
+    }
+  }
+
+  const toggleGroup = (key: string, expanded: boolean) => setExpandedGroups((prev) => ({ ...prev, [key]: expanded }))
 
   // Detect duplicate group names
   const duplicateGroupNames = useMemo(() => {
@@ -136,6 +151,10 @@ export default function App() {
   }
 
   const onGroupClick = async (g: GroupItem, w: WindowItem) => {
+    // If group was explicitly collapsed by user, expand it in panel
+    if (expandedGroups[g.key] === false) {
+      setExpandedGroups(prev => ({ ...prev, [g.key]: true }))
+    }
     await chrome.runtime.sendMessage({ type: 'openGroup', group: g, window: w })
   }
 
@@ -242,21 +261,29 @@ export default function App() {
                     onDeleteWindow={onDeleteWindow}
                     onEditWindowName={onEditWindowName}
                   >
-                    {w.groups.map((g) => (
-                      <GroupItemView
-                        key={g.key}
-                        group={g}
-                        window={w}
-                        isWindowClosed={isClosed}
-                        isExpanded={expanded}
-                        onGroupClick={onGroupClick}
-                        onTabClick={onTabClick}
-                        onCloseGroup={onCloseGroup}
-                        onDeleteGroup={onDeleteGroup}
-                        onDeleteTab={onDeleteTab}
-                        onDeleteClosedTabs={onDeleteClosedTabs}
-                      />
-                    ))}
+                    {w.groups.map((g) => {
+                      // Group is expanded if: explicitly toggled to open OR (not explicitly toggled AND not collapsed in storage)
+                      const isGroupExpanded = expandedGroups[g.key] !== undefined
+                        ? expandedGroups[g.key]
+                        : !(g.collapsed ?? true);
+
+                      return (
+                        <GroupItemView
+                          key={g.key}
+                          group={g}
+                          window={w}
+                          isWindowClosed={isClosed}
+                          isGroupExpanded={isGroupExpanded}
+                          onToggleGroup={(expanded) => toggleGroup(g.key, expanded)}
+                          onGroupClick={onGroupClick}
+                          onTabClick={onTabClick}
+                          onCloseGroup={onCloseGroup}
+                          onDeleteGroup={onDeleteGroup}
+                          onDeleteTab={onDeleteTab}
+                          onDeleteClosedTabs={onDeleteClosedTabs}
+                        />
+                      );
+                    })}
                   </WindowItemView>
                 )}
               </React.Fragment>

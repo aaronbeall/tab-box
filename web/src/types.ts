@@ -20,6 +20,7 @@ export interface StorageGroup {
   title: string;
   color: chrome.tabGroups.ColorEnum | null;
   windowId: number | null; // Chrome window ID (null if not open)
+  collapsed?: boolean; // Synced from Chrome tabGroup.collapsed state
   tabs: StorageTab[];
 }
 

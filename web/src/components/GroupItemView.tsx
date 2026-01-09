@@ -8,7 +8,8 @@ interface GroupItemViewProps {
   group: GroupItem;
   window: WindowItem;
   isWindowClosed: boolean;
-  isExpanded: boolean;
+  isGroupExpanded: boolean;
+  onToggleGroup: (expanded: boolean) => void;
   onGroupClick: (g: GroupItem, w: WindowItem) => void;
   onTabClick: (t: TabItem, g: GroupItem, w: WindowItem) => void;
   onCloseGroup: (e: React.MouseEvent, groupId: number) => void;
@@ -21,7 +22,8 @@ export const GroupItemView: React.FC<GroupItemViewProps> = ({
   group,
   window,
   isWindowClosed,
-  isExpanded,
+  isGroupExpanded,
+  onToggleGroup,
   onGroupClick,
   onTabClick,
   onCloseGroup,
@@ -30,7 +32,7 @@ export const GroupItemView: React.FC<GroupItemViewProps> = ({
   onDeleteClosedTabs,
 }) => {
   const [expandedClosedTabs, setExpandedClosedTabs] = useState(false);
-  
+
   const base = colorToCss(group.color);
   const headerBg = withAlpha(base, 0.18);
   const borderCol = withAlpha(base, 0.35);
@@ -45,11 +47,18 @@ export const GroupItemView: React.FC<GroupItemViewProps> = ({
       className={`rounded-md border ${isGroupClosedInOpenWindow ? 'opacity-50' : ''}`}
       style={{ borderColor: borderCol }}
     >
-      <div className="flex items-center justify-between px-2 py-1 rounded-t-md border-b" style={{ background: headerBg, borderColor: borderCol }}>
+      <div className={`flex items-center justify-between px-2 py-1 rounded-t-md ${isGroupExpanded ? 'border-b' : ''}`} style={{ background: headerBg, borderColor: borderCol }}>
         <div
-          className="inline-flex items-center cursor-pointer flex-1"
+          className="inline-flex items-center gap-1.5 cursor-pointer flex-1"
           onClick={() => onGroupClick(group, window)}
         >
+          <button
+            onClick={(e) => { e.stopPropagation(); onToggleGroup(!isGroupExpanded); }}
+            className="w-5 h-5 flex items-center justify-center shrink-0 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-black/5 dark:hover:bg-white/5 rounded transition-colors"
+            title="Toggle group"
+          >
+            {isGroupExpanded ? <FiChevronDown size={14} /> : <FiChevronRight size={14} />}
+          </button>
           <GroupLabel group={group} />
         </div>
         {group.id !== null ? (
@@ -71,7 +80,7 @@ export const GroupItemView: React.FC<GroupItemViewProps> = ({
         )}
       </div>
       <div className="divide-y divide-gray-200 dark:divide-zinc-800">
-        {openTabs.map((t) => (
+        {isGroupExpanded && openTabs.map((t) => (
           <div
             key={t.id}
             className="flex items-center gap-2 px-2 py-1 cursor-pointer hover:bg-gray-50 dark:hover:bg-zinc-800/60 group"
@@ -88,7 +97,7 @@ export const GroupItemView: React.FC<GroupItemViewProps> = ({
           </div>
         ))}
       </div>
-      {closedTabs.length > 0 && (
+      {closedTabs.length > 0 && isGroupExpanded && (
         <div className="border-t border-gray-200 dark:border-zinc-800">
           <button
             onClick={(e) => {

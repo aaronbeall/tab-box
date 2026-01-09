@@ -745,6 +745,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   return true; // keep channel open for async
 });
 
+// Handle context menu clicks
+chrome.contextMenus.onClicked.addListener(async (info) => {
+  if (info.menuItemId === 'resync-all') {
+    console.log('[TabBox] Resyncing all data via context menu');
+    await reconcileAllWindows();
+  }
+});
+
 // Event wiring
 chrome.runtime.onInstalled.addListener(async () => {
   console.log('[TabBox] Extension installed, reconciling all data');
@@ -752,6 +760,14 @@ chrome.runtime.onInstalled.addListener(async () => {
   if (chrome.sidePanel && typeof chrome.sidePanel.setOptions === 'function') {
     await chrome.sidePanel.setOptions({ path: "web/dist/index.html", enabled: true }).catch(() => { });
   }
+
+  // Create context menu for action button
+  chrome.contextMenus.create({
+    id: 'resync-all',
+    title: 'Refresh Side Panel',
+    contexts: ['action']
+  });
+
   await reconcileAllWindows();
 });
 

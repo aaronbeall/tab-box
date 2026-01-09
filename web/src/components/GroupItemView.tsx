@@ -32,9 +32,11 @@ export const GroupItemView: React.FC<GroupItemViewProps> = ({
   onDeleteClosedTabs,
 }) => {
   const [expandedClosedTabs, setExpandedClosedTabs] = useState(false);
+  const [isHeaderHovered, setIsHeaderHovered] = useState(false);
 
   const base = colorToCss(group.color);
   const headerBg = withAlpha(base, 0.18);
+  const headerBgHover = withAlpha(base, 0.26);
   const borderCol = withAlpha(base, 0.35);
   const tagText = readableTextColor(base);
   const isGroupClosedInOpenWindow = !isWindowClosed && group.id === null;
@@ -47,19 +49,18 @@ export const GroupItemView: React.FC<GroupItemViewProps> = ({
       className={`rounded-md ${isGroupExpanded ? 'border-t border-r border-b border-l-4' : 'border'} ${isGroupClosedInOpenWindow ? 'opacity-50' : ''}`}
       style={{ borderColor: borderCol, borderLeftColor: isGroupExpanded ? base : borderCol }}
     >
-      <div className={`flex items-center justify-between px-2 py-1 rounded-t-md ${isGroupExpanded ? 'border-b' : ''}`} style={{ background: headerBg, borderColor: borderCol }}>
-        <div
-          className="inline-flex items-center gap-1.5 cursor-pointer flex-1"
-          onClick={() => onGroupClick(group, window)}
-        >
-          <button
-            onClick={(e) => { e.stopPropagation(); onToggleGroup(!isGroupExpanded); }}
-            className="w-5 h-5 flex items-center justify-center shrink-0 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-black/5 dark:hover:bg-white/5 rounded transition-colors"
-            title="Toggle group"
-          >
-            {isGroupExpanded ? <FiChevronDown size={14} /> : <FiChevronRight size={14} />}
-          </button>
-          <GroupLabel group={group} />
+      <div
+        className={`flex items-center justify-between px-2 py-1 rounded-t-md cursor-pointer ${isGroupExpanded ? 'border-b' : ''} ${isGroupClosedInOpenWindow ? 'opacity-50' : ''} hover:bg-black/5 dark:hover:bg-white/5 transition-colors`}
+        style={{ background: isHeaderHovered ? headerBgHover : headerBg, borderColor: borderCol }}
+        onMouseEnter={() => setIsHeaderHovered(true)}
+        onMouseLeave={() => setIsHeaderHovered(false)}
+        onClick={() => onToggleGroup(!isGroupExpanded)}
+      >
+        <div className="inline-flex items-center gap-1.5 flex-1">
+          <FiChevronDown size={14} className={`text-gray-600 dark:text-gray-300 transition-transform ${isGroupExpanded ? '' : '-rotate-90'}`} />
+          <span className="flex-1 min-w-0">
+            <GroupLabel group={group} onClick={(e) => { e.stopPropagation(); onGroupClick(group, window); }} />
+          </span>
         </div>
         {group.id !== null ? (
           <button

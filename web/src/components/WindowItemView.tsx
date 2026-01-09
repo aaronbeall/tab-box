@@ -31,7 +31,7 @@ export const WindowItemView: React.FC<WindowItemViewProps> = ({
     <div className={`border border-gray-200 dark:border-zinc-800 rounded-md ${isClosed ? 'opacity-50 bg-gray-50 dark:bg-zinc-900/30' : ''}`}>
       <div
         className="flex items-start justify-between cursor-pointer select-none px-2 py-1 rounded-md hover:bg-gray-50 dark:hover:bg-zinc-800/60"
-        onClick={() => onWindowClick(window)}
+        onClick={() => onToggleExpand(window.key)}
       >
         <div className="flex items-start gap-2">
           <button
@@ -49,7 +49,10 @@ export const WindowItemView: React.FC<WindowItemViewProps> = ({
           ) : (
             <div className="flex flex-wrap gap-1.5 min-w-0">
               {window.name && (
-                <span className="inline-flex items-center justify-center rounded-md px-1.5 py-0.5 text-[11px] font-semibold min-w-[1.25rem] min-h-[1.25rem] bg-gray-200 dark:bg-zinc-700 text-gray-900 dark:text-gray-100">
+                <span
+                  className="inline-flex items-center justify-center rounded-md px-1.5 py-0.5 text-[11px] font-semibold min-w-[1.25rem] min-h-[1.25rem] bg-gray-200 dark:bg-zinc-700 text-gray-900 dark:text-gray-100 hover:bg-gray-300 dark:hover:bg-zinc-600 transition-colors"
+                  onClick={e => { e.stopPropagation(); onWindowClick(window) }}
+                >
                   {window.name}
                 </span>
               )}

@@ -28,7 +28,7 @@ export interface StorageGroup {
  */
 export interface StorageWindow {
   id: number | null; // Chrome window ID (null if not open)
-  title: string;
+  name?: string; // Optional user-defined name
   groups: Record<string, StorageGroup>; // keyed by group ID
 }
 

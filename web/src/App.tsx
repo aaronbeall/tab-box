@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { FiChevronRight, FiChevronDown, FiX, FiTrash2, FiInfo } from 'react-icons/fi'
+import { FiChevronRight, FiChevronDown, FiX, FiTrash2, FiInfo, FiEdit } from 'react-icons/fi'
 import { colorToCss, displayUrl, withAlpha, readableTextColor } from './utils'
 import type { TabItem, GroupItem, WindowItem, StorageData } from './types'
 
@@ -21,11 +21,34 @@ async function buildModel(): Promise<WindowItem[]> {
     model.push({
       id: w.id,
       key: windowKey,
-      title: w.title || '',
+      name: w.name,
       groups
     })
   }
   return model
+}
+
+function EditableWindowName({ name, countLabel, onEdit }: { name?: string; countLabel: string; onEdit: () => void }) {
+  const hasName = !!name
+  return (
+    <div className="inline-flex items-center gap-2 group/name">
+      {hasName ? (
+        <div className="flex items-center gap-1.5 mt-0.5 truncate">
+          <span className="font-semibold">{name}</span>
+          <span className="text-gray-600 dark:text-gray-400">({countLabel})</span>
+        </div>
+      ) : (
+        <span className="font-semibold mt-0.5 text-gray-600 dark:text-gray-400 truncate">{countLabel}</span>
+      )}
+      <button
+        onClick={(e) => { e.stopPropagation(); onEdit(); }}
+        className="w-6 h-6 text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 flex items-center justify-center opacity-0 group-hover/name:opacity-100"
+        title={hasName ? 'Edit window name' : 'Name window'}
+      >
+        <FiEdit size={14} />
+      </button>
+    </div>
+  )
 }
 
 export default function App() {
@@ -70,7 +93,7 @@ export default function App() {
         const closedTabsMatch = searchClosedTabs && g.tabs.filter(t => t.id === null).some((t) => (t.title || '').toLowerCase().includes(q) || (t.url || '').toLowerCase().includes(q))
         return groupMatches || openTabsMatch || closedTabsMatch
       })
-      const matchWindow = (w.title || '').toLowerCase().includes(q)
+      const matchWindow = (w.name || '').toLowerCase().includes(q)
       return matchWindow || wg.length ? { ...w, groups: wg } : null
     }).filter(Boolean) as WindowItem[]
   }, [q, model, searchClosedTabs])
@@ -90,8 +113,8 @@ export default function App() {
       if (aIsOpen && !bIsOpen) return -1
       if (bIsOpen && !aIsOpen) return 1
 
-      // Finally sort by title
-      return (a.title || '').localeCompare(b.title || '')
+      // Finally sort by name
+      return (a.name || '').localeCompare(b.name || '')
     })
     // Sort groups within each window: open groups first, then closed groups
     return list.map(w => ({
@@ -164,6 +187,13 @@ export default function App() {
     await chrome.runtime.sendMessage({ type: 'deleteClosedTabs', windowKey: w.key, groupKey: g.key })
   }
 
+  const onEditWindowName = async (w: WindowItem) => {
+    const value = prompt('Window name (optional):', w.name || '')
+    if (value === null) return
+    const name = value.trim()
+    await chrome.runtime.sendMessage({ type: 'setWindowName', windowKey: w.key, name })
+  }
+
   return (
     <div className="flex flex-col h-screen bg-white dark:bg-zinc-900 text-gray-900 dark:text-gray-100">
       <header className="p-2 border-b border-gray-200 dark:border-zinc-800">
@@ -229,9 +259,18 @@ export default function App() {
                           {expanded ? <FiChevronDown size={12} /> : <FiChevronRight size={12} />}
                         </button>
                         {expanded ? (
-                          <span className="font-semibold mt-0.5">{w.groups.length} {w.groups.length === 1 ? 'group' : 'groups'}</span>
+                          <EditableWindowName
+                            name={w.name}
+                            countLabel={`${w.groups.length} ${w.groups.length === 1 ? 'group' : 'groups'}`}
+                            onEdit={() => onEditWindowName(w)}
+                          />
                         ) : (
                           <div className="flex flex-wrap gap-1.5 min-w-0">
+                            {w.name && (
+                              <span className="inline-flex items-center justify-center rounded px-1.5 py-0.5 text-[11px] font-semibold min-w-[1.25rem] min-h-[1.25rem] bg-gray-200 dark:bg-zinc-700 text-gray-900 dark:text-gray-100">
+                                {w.name}
+                              </span>
+                            )}
                             {w.groups.map((g) => {
                               const base = colorToCss(g.color)
                               const tagText = readableTextColor(base)

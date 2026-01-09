@@ -375,7 +375,6 @@ async function syncWindow(windowId: number) {
     // Create new window entry
     data.windows[windowId] = {
       id: windowId,
-      title: `Window ${windowId}`,
       groups: {}
     };
     await setStorage(data);
@@ -696,6 +695,21 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         const data = await getStorage();
         if (data.windows[msg.windowKey]) {
           delete data.windows[msg.windowKey];
+          await setStorage(data);
+          sendResponse({ ok: true });
+        } else {
+          sendResponse({ ok: false, error: "Window not found" });
+        }
+      } else if (msg && msg.type === "setWindowName" && msg.windowKey !== undefined) {
+        const data = await getStorage();
+        const win = data.windows[msg.windowKey];
+        if (win) {
+          const name = typeof msg.name === "string" ? msg.name.trim() : "";
+          if (name) {
+            win.name = name;
+          } else {
+            delete win.name;
+          }
           await setStorage(data);
           sendResponse({ ok: true });
         } else {

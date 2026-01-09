@@ -38,31 +38,33 @@ A side panel extension to persist and manage tab groups and windows in a vertica
 
 ## Todo
 
-- [ ] Option: delete group if ungrouped
+- [ ] User preferences:
+  - [ ] Delete group if ungrouped
+  - [ ] Reconcile data on focus
+  - [ ] Expand groups by default
+  - [ ] Expand closed groups by default
+  - [ ] Sync group expand/collapse from panel
 - [ ] Export/Import
 - [ ] Account data sync
 - [x] Collapsable groups
 - [x] Sync group collapsed state
-- [ ] Sync group order
-- [ ] Include pinned tabs
+- [x] Sync group order
+- [ ] Include pinned tabs as psuedo group
 - [ ] Sync window name (as of now Chrome API doesn't support this)
 - [x] Refresh button to force reconcile data
-- [ ] Option: reconcile data on focus
 - [ ] Share (shares list tab group URLs)
 - [ ] Tab group management from panel
   - [ ] Edit group name/color
   - [ ] Move group to window
-  - [ ] Merge group with other group
+  - [ ] Move group tabs to other group
   - [ ] Remove tab
   - [ ] Move tab (drag and drop)
-  - [ ] Move tab group (drah and drop)
+  - [ ] Move tab group (drag and drop)
 - [ ] Trash (deleted items, empty trash)
 - [x] Other Windows section, collapsable
 - [ ] Empty state (no tab groups)
 - [ ] Onboarding
-- [ ] Click currently focused group should close the group in chrome
-- [ ] Option: expand groups by default
-- [ ] Option: sync group expand/collapse from panel
+- [ ] Click currently focused group should collapse it (in panel and chrome) to make cycling easy
 
 ## Bugs
 - [ ] Detaching and re-attaching group to windows causes sync issues

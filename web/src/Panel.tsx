@@ -41,6 +41,7 @@ export default function Panel() {
   const [searchAllWindows, setSearchAllWindows] = useState(true)
   const [searchClosedTabs, setSearchClosedTabs] = useState(false)
   const [expandedClosedWindows, setExpandedClosedWindows] = useState(false)
+  const [expandedClosedGroupsByWindow, setExpandedClosedGroupsByWindow] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
     const load = async () => {
@@ -264,27 +265,40 @@ export default function Panel() {
                     onDeleteWindow={onDeleteWindow}
                     onEditWindowName={onEditWindowName}
                   >
-                    {w.groups.map((g) => {
-                      // Group is expanded if: explicitly toggled to open OR (not explicitly toggled AND not collapsed in storage AND not closed)
+                    {w.groups.map((g, idx) => {
+                      const isFirstClosed = g.id === null && (idx === 0 || w.groups[idx - 1].id !== null);
+                      const closedGroupsExpanded = expandedClosedGroupsByWindow[w.key] ?? true;
+                      const shouldRender = g.id !== null || closedGroupsExpanded;
                       const isGroupExpanded = expandedGroups[g.key] !== undefined
                         ? expandedGroups[g.key]
                         : g.id != null && !(g.collapsed ?? true)
 
                       return (
-                        <GroupItemView
-                          key={g.key}
-                          group={g}
-                          window={w}
-                          isWindowClosed={isClosed}
-                          isGroupExpanded={isGroupExpanded}
-                          onToggleGroup={(expanded) => toggleGroup(g.key, expanded)}
-                          onGroupClick={onGroupClick}
-                          onTabClick={onTabClick}
-                          onCloseGroup={onCloseGroup}
-                          onDeleteGroup={onDeleteGroup}
-                          onDeleteTab={onDeleteTab}
-                          onDeleteClosedTabs={onDeleteClosedTabs}
-                        />
+                        <React.Fragment key={g.key}>
+                          {isFirstClosed && (
+                            <CollapsableHeader
+                              title="Closed Groups"
+                              isOpen={closedGroupsExpanded}
+                              onToggle={() => setExpandedClosedGroupsByWindow(prev => ({ ...prev, [w.key]: !closedGroupsExpanded }))}
+                              count={w.groups.filter(g => g.id === null).length}
+                            />
+                          )}
+                          {shouldRender && (
+                            <GroupItemView
+                              group={g}
+                              window={w}
+                              isWindowClosed={isClosed}
+                              isGroupExpanded={isGroupExpanded}
+                              onToggleGroup={(expanded) => toggleGroup(g.key, expanded)}
+                              onGroupClick={onGroupClick}
+                              onTabClick={onTabClick}
+                              onCloseGroup={onCloseGroup}
+                              onDeleteGroup={onDeleteGroup}
+                              onDeleteTab={onDeleteTab}
+                              onDeleteClosedTabs={onDeleteClosedTabs}
+                            />
+                          )}
+                        </React.Fragment>
                       );
                     })}
                   </WindowItemView>

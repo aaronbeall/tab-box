@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { FiChevronRight, FiChevronDown, FiX, FiTrash2, FiInfo, FiEdit } from 'react-icons/fi'
-import { colorToCss, displayUrl, withAlpha, readableTextColor } from './utils'
-import type { TabItem, GroupItem, WindowItem, StorageData } from './types'
+import { FiChevronDown, FiChevronRight, FiInfo, FiTrash2, FiX } from 'react-icons/fi'
 import { EditableName } from './components/EditableName'
+import type { GroupItem, StorageData, TabItem, WindowItem } from './types'
+import { colorToCss, readableTextColor, withAlpha } from './utils'
 
 async function buildModel(): Promise<WindowItem[]> {
   const response = await chrome.runtime.sendMessage({ type: 'getStorage' }).catch(() => ({ ok: false }))
@@ -237,7 +237,7 @@ export default function App() {
                           {expanded ? <FiChevronDown size={12} /> : <FiChevronRight size={12} />}
                         </button>
                         {expanded ? (
-                          <EditableWindowName
+                          <EditableName
                             name={w.name}
                             countLabel={`${w.groups.length} ${w.groups.length === 1 ? 'group' : 'groups'}`}
                             onEdit={() => onEditWindowName(w)}

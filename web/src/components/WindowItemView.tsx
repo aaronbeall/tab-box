@@ -38,7 +38,7 @@ export const WindowItemView: React.FC<WindowItemViewProps> = ({
             onClick={(e) => { e.stopPropagation(); onToggleExpand(window.key) }}
             className="mt-0.5 w-5 h-5 border border-gray-400 dark:border-zinc-600 rounded text-xs text-gray-600 dark:text-gray-300 grid place-items-center shrink-0 bg-white dark:bg-zinc-900"
           >
-            {isExpanded ? <FiChevronDown size={12} /> : <FiChevronRight size={12} />}
+            <FiChevronDown size={12} className={`transition-transform ${isExpanded ? '' : '-rotate-90'}`} />
           </button>
           {isExpanded ? (
             <EditableName

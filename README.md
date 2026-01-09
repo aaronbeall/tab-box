@@ -63,6 +63,7 @@ A side panel extension to persist and manage tab groups via bookmarks. Displays 
 - [ ] Onboarding
 - [ ] Click currently focused group should close the group in chrome
 - [ ] Option: expand groups by default
+- [ ] Option: sync group expand/collapse from panel
 
 ## Bugs
 - [ ] Detaching and re-attaching group to windows causes sync issues

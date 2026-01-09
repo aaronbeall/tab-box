@@ -68,3 +68,4 @@ A side panel extension to persist and manage tab groups and windows in a vertica
 - [ ] Detaching and re-attaching group to windows causes sync issues
   - [ ] Drag group out of window -- it still appears in old window
   - [ ] Dragging group into window caused all other groups in window to be shown as closed, clicking them caused duplicates -- reconcile fixed it
+- [ ] Opening closed group caused it to be duplicated, duplicate group did not have history (timing issue?)

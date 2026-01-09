@@ -111,7 +111,10 @@ export default function Panel() {
         const bIsOpen = b.id !== null
         if (aIsOpen && !bIsOpen) return -1
         if (bIsOpen && !aIsOpen) return 1
-        return 0
+        const posA = a.position ?? Number.MAX_SAFE_INTEGER
+        const posB = b.position ?? Number.MAX_SAFE_INTEGER
+        if (posA !== posB) return posA - posB
+        return (a.title || '').localeCompare(b.title || '')
       })
     }))
   }, [filtered, currentWindowId])
@@ -230,7 +233,7 @@ export default function Panel() {
         {duplicateGroupNames.length > 0 && (
           <div className="mt-2 flex gap-2 p-2 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800/50 rounded text-xs text-blue-800 dark:text-blue-200">
             <FiInfo size={14} className="shrink-0 mt-0.5" />
-            <span>Duplicate group names detected: <strong>{duplicateGroupNames.join(', ')}</strong>. Unique names help with reliable restoration after Chrome restart.</span>
+            <span>Duplicate group names detected: <strong>{duplicateGroupNames.join(', ')}</strong>. Unique names help with reliable restoration across sessions.</span>
           </div>
         )}
       </header>
@@ -262,10 +265,10 @@ export default function Panel() {
                     onEditWindowName={onEditWindowName}
                   >
                     {w.groups.map((g) => {
-                      // Group is expanded if: explicitly toggled to open OR (not explicitly toggled AND not collapsed in storage)
+                      // Group is expanded if: explicitly toggled to open OR (not explicitly toggled AND not collapsed in storage AND not closed)
                       const isGroupExpanded = expandedGroups[g.key] !== undefined
                         ? expandedGroups[g.key]
-                        : !(g.collapsed ?? true);
+                        : g.id != null && !(g.collapsed ?? true)
 
                       return (
                         <GroupItemView

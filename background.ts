@@ -215,7 +215,7 @@ async function reconcileAllWindows() {
   // Sync all groups in all windows
   const groups = await chrome.tabGroups.query({});
   for (const group of groups) {
-    await syncTabGroup(group.id, group.windowId);
+    await syncTabGroup(group.id, group.windowId, true);
   }
 
   // Ater syncing data, mark all closed windows and groups as closed (id = null)
@@ -295,7 +295,7 @@ async function reconcileWindow(window: StorageWindow) {
 
     // Sync each Chrome group
     for (const group of chromeGroups) {
-      await syncTabGroup(group.id, window.id);
+      await syncTabGroup(group.id, window.id, true);
     }
 
     // Re-fetch data after syncing (syncTabGroup modifies storage)
@@ -385,7 +385,7 @@ async function syncWindow(windowId: number) {
  * Ensures stored group exists and is up to date
  * Moves group to correct window as needed
  */
-async function syncTabGroup(groupId: number, windowId: number) {
+async function syncTabGroup(groupId: number, windowId: number, updatePositions = false) {
   const group = await chrome.tabGroups.get(groupId).catch(() => null);
   if (!group) return;
 
@@ -395,7 +395,7 @@ async function syncTabGroup(groupId: number, windowId: number) {
   // Ensure window exists -- should exist by this point, maybe timing issue when detaching groups?
   if (!data.windows[windowId]) {
     await syncWindow(windowId);
-    return syncTabGroup(groupId, windowId); // Retry after syncing window
+    return syncTabGroup(groupId, windowId, updatePositions); // Retry after syncing window
   }
 
   // First try to lookup stored group by id
@@ -414,6 +414,12 @@ async function syncTabGroup(groupId: number, windowId: number) {
   // Merge tabs: keep existing stored tabs, update or close them, add new ones
   const mergedTabs = stored ? mergeStoredTabs(tabs, stored.group.tabs) : mapTabsToStored(tabs);
 
+  // Determine position from Chrome (position is stable/ordered); fallback to index if missing
+  const chromeGroupsInWindow = await chrome.tabGroups.query({ windowId });
+  const indexInWindow = chromeGroupsInWindow.findIndex(g => g.id === groupId);
+  const chromePosition = typeof group.position === 'number' ? group.position : undefined;
+  const groupPosition = chromePosition ?? (indexInWindow >= 0 ? indexInWindow : stored?.group.position ?? 0);
+
   // Prepare updated group data
   const groupData: StorageGroup = {
     id: groupId,
@@ -421,6 +427,7 @@ async function syncTabGroup(groupId: number, windowId: number) {
     color: group.color || null,
     windowId: windowId,
     collapsed: group.collapsed,
+    position: groupPosition,
     tabs: mergedTabs
   };
 
@@ -435,6 +442,23 @@ async function syncTabGroup(groupId: number, windowId: number) {
   } else {
     // Create new stored group entry
     data.windows[windowId].groups[groupId] = groupData;
+  }
+
+  // If positions may have changed, update all open groups in this window
+  if (updatePositions) {
+    const winGroups = data.windows[windowId]?.groups;
+    if (winGroups) {
+      for (const cg of chromeGroupsInWindow) {
+        const pos = typeof cg.position === 'number' ? cg.position : chromeGroupsInWindow.findIndex(g => g.id === cg.id);
+        for (const key in winGroups) {
+          const g = winGroups[key];
+          if (g.id === cg.id) {
+            g.position = pos;
+            break;
+          }
+        }
+      }
+    }
   }
 
   await setStorage(data);
@@ -820,7 +844,7 @@ chrome.windows.onRemoved.addListener(async (windowId) => {
 // Tab Groups sync - sync only the affected group
 chrome.tabGroups.onCreated.addListener(async (group) => {
   console.log('[TabBox] Tab group created:', group.id, group.title);
-  await syncTabGroup(group.id, group.windowId);
+  await syncTabGroup(group.id, group.windowId, true);
 });
 chrome.tabGroups.onUpdated.addListener(async (group) => {
   console.log('[TabBox] Tab group updated:', group.id, group.title);
@@ -828,7 +852,7 @@ chrome.tabGroups.onUpdated.addListener(async (group) => {
 });
 chrome.tabGroups.onMoved.addListener(async (group) => {
   console.log('[TabBox] Tab group moved:', group.id, 'to window', group.windowId);
-  await syncTabGroup(group.id, group.windowId);
+  await syncTabGroup(group.id, group.windowId, true);
 });
 chrome.tabGroups.onRemoved.addListener(async (group) => {
   console.log('[TabBox] Tab group removed:', group.id);
@@ -836,6 +860,27 @@ chrome.tabGroups.onRemoved.addListener(async (group) => {
   const data = await getStorage();
   updateGroupEntry(data, group.id, (g) => { g.id = null });
   await setStorage(data);
+  // Update positions of remaining open groups in the window
+  if (group.windowId !== undefined) {
+    const chromeGroups = await chrome.tabGroups.query({ windowId: group.windowId }).catch(() => []);
+    if (chromeGroups.length > 0) {
+      const next = await getStorage();
+      const winGroups = next.windows[group.windowId]?.groups;
+      if (winGroups) {
+        chromeGroups.forEach((cg, idx) => {
+          const pos = typeof cg.position === 'number' ? cg.position : idx;
+          for (const key in winGroups) {
+            const g = winGroups[key];
+            if (g.id === cg.id) {
+              g.position = pos;
+              break;
+            }
+          }
+        });
+        await setStorage(next);
+      }
+    }
+  }
 });
 
 // Tabs changes - sync the affected group
@@ -857,12 +902,12 @@ chrome.tabs.onMoved.addListener(async (tabId, moveInfo) => {
 chrome.tabs.onDetached.addListener(async (tabId, detachInfo) => {
   console.log('[TabBox] Tab detached:', tabId, 'from window:', detachInfo.oldWindowId);
   const tab = await chrome.tabs.get(tabId).catch(() => null);
-  if (tab && tab.groupId && tab.groupId !== -1) await syncTabGroup(tab.groupId, detachInfo.oldWindowId);
+  if (tab && tab.groupId && tab.groupId !== -1) await syncTabGroup(tab.groupId, detachInfo.oldWindowId, true);
 });
 chrome.tabs.onAttached.addListener(async (tabId, attachInfo) => {
   console.log('[TabBox] Tab attached:', tabId, 'to window:', attachInfo.newWindowId);
   const tab = await chrome.tabs.get(tabId).catch(() => null);
-  if (tab && tab.groupId && tab.groupId !== -1) await syncTabGroup(tab.groupId, attachInfo.newWindowId);
+  if (tab && tab.groupId && tab.groupId !== -1) await syncTabGroup(tab.groupId, attachInfo.newWindowId, true);
 });
 chrome.tabs.onRemoved.addListener(async (tabId, removeInfo) => {
   console.log('[TabBox] Tab removed:', tabId);

@@ -44,8 +44,8 @@ export const GroupItemView: React.FC<GroupItemViewProps> = ({
 
   return (
     <div
-      className={`rounded-md border ${isGroupClosedInOpenWindow ? 'opacity-50' : ''}`}
-      style={{ borderColor: borderCol }}
+      className={`rounded-md ${isGroupExpanded ? 'border-t border-r border-b border-l-4' : 'border'} ${isGroupClosedInOpenWindow ? 'opacity-50' : ''}`}
+      style={{ borderColor: borderCol, borderLeftColor: isGroupExpanded ? base : borderCol }}
     >
       <div className={`flex items-center justify-between px-2 py-1 rounded-t-md ${isGroupExpanded ? 'border-b' : ''}`} style={{ background: headerBg, borderColor: borderCol }}>
         <div

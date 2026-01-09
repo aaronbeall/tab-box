@@ -1,8 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { FiChevronDown, FiChevronRight, FiInfo, FiTrash2, FiX } from 'react-icons/fi'
+import { FiInfo } from 'react-icons/fi'
 import { EditableName } from './components/EditableName'
+import { Switch } from './components/Switch';
+import { CollapsableHeader } from './components/CollapsableHeader';
+import { WindowItemView } from './components/WindowItemView';
+import { GroupItemView } from './components/GroupItemView';
 import type { GroupItem, StorageData, TabItem, WindowItem } from './types'
-import { colorToCss, readableTextColor, withAlpha } from './utils'
 
 async function buildModel(): Promise<WindowItem[]> {
   const response = await chrome.runtime.sendMessage({ type: 'getStorage' }).catch(() => ({ ok: false }))
@@ -35,7 +38,6 @@ export default function App() {
   const [currentWindowId, setCurrentWindowId] = useState<number | undefined>(undefined)
   const [expandedWindows, setExpandedWindows] = useState<Record<string, boolean>>({})
   const [searchClosedTabs, setSearchClosedTabs] = useState(false)
-  const [expandedClosedTabs, setExpandedClosedTabs] = useState<Record<string, boolean>>({})
   const [expandedClosedWindows, setExpandedClosedWindows] = useState(false)
 
   useEffect(() => {
@@ -184,18 +186,11 @@ export default function App() {
         />
         {q && (
           <div className="mt-2 flex items-center gap-2">
-            <label className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400 cursor-pointer select-none">
-              <div className="relative inline-flex w-10 h-5 bg-gray-300 dark:bg-gray-700 rounded-full transition-colors" style={{ backgroundColor: searchClosedTabs ? '#3b82f6' : undefined }}>
-                <input
-                  type="checkbox"
-                  checked={searchClosedTabs}
-                  onChange={(e) => setSearchClosedTabs(e.target.checked)}
-                  className="sr-only"
-                />
-                <span className={`absolute top-0.5 left-0.5 inline-block w-4 h-4 bg-white rounded-full transition-transform ${searchClosedTabs ? 'translate-x-5' : ''}`} />
-              </div>
-              <span>Include closed tabs</span>
-            </label>
+            <Switch
+              checked={searchClosedTabs}
+              onChange={(e) => setSearchClosedTabs(e.target.checked)}
+              label="Include closed tabs"
+            />
           </div>
         )}
         {duplicateGroupNames.length > 0 && (
@@ -215,189 +210,39 @@ export default function App() {
             return (
               <React.Fragment key={w.key}>
                 {isFirstClosed && (
-                  <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 pt-2 select-none">
-                    <div className="h-px flex-1 bg-gray-200 dark:bg-zinc-800" />
-                    <div
-                      onClick={() => setExpandedClosedWindows(!expandedClosedWindows)}
-                      className="inline-flex items-center gap-1.5 px-2 py-1 rounded cursor-pointer hover:bg-gray-100 dark:hover:bg-zinc-800/60"
-                    >
-                      {expandedClosedWindows ? <FiChevronDown size={12} /> : <FiChevronRight size={12} />}
-                      <span className="font-semibold">Closed Windows ({ordered.filter(w => w.id === null).length})</span>
-                    </div>
-                    <div className="h-px flex-1 bg-gray-200 dark:bg-zinc-800" />
-                  </div>
+                  <CollapsableHeader
+                    title="Closed Windows"
+                    isOpen={expandedClosedWindows}
+                    onToggle={() => setExpandedClosedWindows(!expandedClosedWindows)}
+                    count={ordered.filter(w => w.id === null).length}
+                  />
                 )}
                 {(!isClosed || expandedClosedWindows) && (
-                  <div className={`border border-gray-200 dark:border-zinc-800 rounded-md ${isClosed ? 'opacity-50 bg-gray-50 dark:bg-zinc-900/30' : ''}`}>
-                    <div className="flex items-start justify-between cursor-pointer select-none px-2 py-1 rounded-md hover:bg-gray-50 dark:hover:bg-zinc-800/60" onClick={() => onWindowClick(w)}>
-                      <div className="flex items-start gap-2">
-                        <button
-                          onClick={(e) => { e.stopPropagation(); toggleWindow(w.key) }}
-                          className="mt-0.5 w-5 h-5 border border-gray-400 dark:border-zinc-600 rounded text-xs text-gray-600 dark:text-gray-300 grid place-items-center shrink-0 bg-white dark:bg-zinc-900">
-                          {expanded ? <FiChevronDown size={12} /> : <FiChevronRight size={12} />}
-                        </button>
-                        {expanded ? (
-                          <EditableName
-                            name={w.name}
-                            countLabel={`${w.groups.length} ${w.groups.length === 1 ? 'group' : 'groups'}`}
-                            onEdit={() => onEditWindowName(w)}
-                          />
-                        ) : (
-                          <div className="flex flex-wrap gap-1.5 min-w-0">
-                            {w.name && (
-                              <span className="inline-flex items-center justify-center rounded px-1.5 py-0.5 text-[11px] font-semibold min-w-[1.25rem] min-h-[1.25rem] bg-gray-200 dark:bg-zinc-700 text-gray-900 dark:text-gray-100">
-                                {w.name}
-                              </span>
-                            )}
-                            {w.groups.map((g) => {
-                              const base = colorToCss(g.color)
-                              const tagText = readableTextColor(base)
-                              const isGroupClosed = !isClosed && g.id === null
-                              return (
-                                <span
-                                  key={g.key}
-                                  className={`inline-flex items-center justify-center rounded px-1.5 py-0.5 text-[11px] font-semibold min-w-[1.25rem] min-h-[1.25rem] cursor-pointer hover:opacity-80 ${isGroupClosed ? 'opacity-50' : ''}`}
-                                  style={{ background: base, color: tagText }}
-                                  onClick={(e) => { e.stopPropagation(); onGroupClick(g, w) }}
-                                >
-                                  {g.title}
-                                </span>
-                              )
-                            })}
-                          </div>
-                        )}
-                      </div>
-                      {isClosed && (
-                        <button
-                          onClick={(e) => onDeleteWindow(e, w)}
-                          className="mt-0.5 w-5 h-5 text-gray-600 dark:text-gray-300 hover:text-red-600 dark:hover:text-red-400 flex items-center justify-center shrink-0">
-                          <FiTrash2 size={16} />
-                        </button>
-                      )}
-                    </div>
-                    {expanded && (
-                      <div className="border-t border-gray-200 dark:border-zinc-800 space-y-2 px-2 py-2">
-                        {w.groups.map((g) => {
-                          const base = colorToCss(g.color)
-                          const headerBg = withAlpha(base, 0.18)
-                          const borderCol = withAlpha(base, 0.35)
-                          const tagText = readableTextColor(base)
-                          const isGroupClosedInOpenWindow = !isClosed && g.id === null
-                          return (
-                            <div key={g.key} className={`rounded-md border ${isGroupClosedInOpenWindow ? 'opacity-50' : ''}`} style={{ borderColor: borderCol }}>
-                              <div className="flex items-center justify-between px-2 py-1 rounded-t-md border-b" style={{ background: headerBg, borderColor: borderCol }}>
-                                <div
-                                  className="inline-flex items-center cursor-pointer flex-1"
-                                  onClick={() => onGroupClick(g, w)}
-                                >
-                                  <span
-                                    className="inline-flex items-center justify-center rounded-md px-2 py-0.5 text-xs font-semibold min-w-[1.5rem] min-h-[1.5rem]"
-                                    style={{ background: base, color: tagText }}
-                                  >
-                                    {g.title}
-                                  </span>
-                                </div>
-                                {g.id !== null ? (
-                                  <button
-                                    onClick={(e) => onCloseGroup(e, g.id!)}
-                                    className="w-5 h-5 text-gray-600 dark:text-gray-300 hover:text-red-600 dark:hover:text-red-400 flex items-center justify-center shrink-0 -mr-1"
-                                    title="Close group"
-                                  >
-                                    <FiX size={16} />
-                                  </button>
-                                ) : (
-                                  <button
-                                    onClick={(e) => onDeleteGroup(e, w, g)}
-                                    className="w-5 h-5 text-gray-600 dark:text-gray-300 hover:text-red-600 dark:hover:text-red-400 flex items-center justify-center shrink-0 -mr-1"
-                                    title="Delete group"
-                                  >
-                                    <FiTrash2 size={16} />
-                                  </button>
-                                )}
-                              </div>
-                              {(() => {
-                                const openTabs = g.tabs.filter(t => t.id !== null)
-                                const closedTabs = g.tabs.filter(t => t.id === null)
-                                return (
-                                  <>
-                                    <div className="divide-y divide-gray-200 dark:divide-zinc-800">
-                                      {openTabs.map((t) => (
-                                        <div
-                                          key={t.id}
-                                          className="flex items-center gap-2 px-2 py-1 cursor-pointer hover:bg-gray-50 dark:hover:bg-zinc-800/60 group"
-                                          onClick={() => onTabClick(t, g, w)}
-                                          title={`${t.title || ''} | ${t.url}`}
-                                        >
-                                          <img
-                                            src={`chrome-extension://${chrome.runtime.id}/_favicon/?pageUrl=${encodeURIComponent(t.url)}&size=16`}
-                                            alt=""
-                                            className="w-4 h-4 rounded-sm shrink-0"
-                                            referrerPolicy="no-referrer"
-                                          />
-                                          <span className="min-w-0 flex-1 truncate">{t.title}</span>
-                                        </div>
-                                      ))}
-                                    </div>
-                                    {closedTabs.length > 0 && (
-                                      <div className="border-t border-gray-200 dark:border-zinc-800">
-                                        <button
-                                          onClick={(e) => {
-                                            e.stopPropagation()
-                                            const key = `${g.key}-history`
-                                            setExpandedClosedTabs(prev => ({ ...prev, [key]: !prev[key] }))
-                                          }}
-                                          className="w-full flex items-center gap-1.5 px-2 py-1 text-xs text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-zinc-800/60"
-                                        >
-                                          {expandedClosedTabs[`${g.key}-history`] ? <FiChevronDown size={12} /> : <FiChevronRight size={12} />}
-                                          <span>History ({closedTabs.length})</span>
-                                        </button>
-                                        {expandedClosedTabs[`${g.key}-history`] && (
-                                          <div className="divide-y divide-gray-200 dark:divide-zinc-800 bg-gray-50 dark:bg-zinc-900/30">
-                                            {closedTabs.map((t) => (
-                                              <div
-                                                key={`closed-${t.url}`}
-                                                className="flex items-center gap-2 px-2 py-1 opacity-60 group cursor-pointer hover:bg-gray-100 dark:hover:bg-zinc-800/40 hover:opacity-100 transition-all"
-                                                onClick={() => onTabClick(t, g, w)}
-                                                title={`${t.title || ''} | ${t.url}`}
-                                              >
-                                                <img
-                                                  src={`chrome-extension://${chrome.runtime.id}/_favicon/?pageUrl=${encodeURIComponent(t.url)}&size=16`}
-                                                  alt=""
-                                                  className="w-4 h-4 rounded-sm shrink-0"
-                                                  referrerPolicy="no-referrer"
-                                                />
-                                                <span className="min-w-0 flex-1 truncate">{t.title}</span>
-                                                <button
-                                                  onClick={(e) => onDeleteTab(e, w, g, t.id)}
-                                                  className="w-4 h-4 text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 flex items-center justify-center shrink-0 opacity-0 group-hover:opacity-100"
-                                                  title="Delete tab"
-                                                >
-                                                  <FiTrash2 size={12} />
-                                                </button>
-                                              </div>
-                                            ))}
-                                            <div className="h-px bg-gray-200 dark:bg-zinc-800" />
-                                            <div
-                                              className="flex items-center gap-2 px-2 py-1 text-xs text-red-600 dark:text-red-400 cursor-pointer hover:bg-gray-100 dark:hover:bg-zinc-800/40"
-                                              onClick={(e) => onDeleteClosedTabs(e, w, g)}
-                                              title="Clear all closed tabs"
-                                            >
-                                              <FiTrash2 size={12} />
-                                              <span>Clear history</span>
-                                            </div>
-                                          </div>
-                                        )}
-                                      </div>
-                                    )}
-                                  </>
-                                )
-                              })()}
-                            </div>
-                          )
-                        })}
-                      </div>
-                    )}
-                  </div>
+                  <WindowItemView
+                    window={w}
+                    isExpanded={expanded}
+                    onToggleExpand={toggleWindow}
+                    onWindowClick={onWindowClick}
+                    onGroupClick={onGroupClick}
+                    onDeleteWindow={onDeleteWindow}
+                    onEditWindowName={onEditWindowName}
+                  >
+                    {w.groups.map((g) => (
+                      <GroupItemView
+                        key={g.key}
+                        group={g}
+                        window={w}
+                        isWindowClosed={isClosed}
+                        isExpanded={expanded}
+                        onGroupClick={onGroupClick}
+                        onTabClick={onTabClick}
+                        onCloseGroup={onCloseGroup}
+                        onDeleteGroup={onDeleteGroup}
+                        onDeleteTab={onDeleteTab}
+                        onDeleteClosedTabs={onDeleteClosedTabs}
+                      />
+                    ))}
+                  </WindowItemView>
                 )}
               </React.Fragment>
             )

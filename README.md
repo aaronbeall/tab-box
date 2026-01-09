@@ -1,14 +1,13 @@
 # Tab Box (Chrome Extension)
 
-A side panel extension to persist and manage tab groups via bookmarks. Displays a tree of Window → Tab Group → Tab, stored under a bookmarks folder named "Tab Box".
+A side panel extension to persist and manage tab groups and windows in a vertical side panel. Displays a tree of Window → Tab Group → Tab, and closed windows, groups, or tabs are remembered in the panel to be re-opened at any time you want.
 
 ## Features
 
 - Side panel with a searchable tree: Window → Tab Group → Tab
-- Syncs current tab groups to bookmarks automatically (create/update/move)
+- Syncs current tab groups to panel automatically (create/update/move)
 - Closing a tab group does not remove it from Tab Box (persisted)
-- Clicking window focuses/opens it; clicking group opens/focuses it; clicking tab opens/focuses it
-- Auto-expands the currently focused window (groups remain collapsed by default)
+- Clicking a tab group focuses it, or re-opens it in the window
 
 ## Install (Unpacked)
 

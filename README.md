@@ -42,12 +42,12 @@ A side panel extension to persist and manage tab groups via bookmarks. Displays 
 - [ ] Option: delete group if ungrouped
 - [ ] Export/Import
 - [ ] Account data sync
-- [ ] Collapsable groups
-- [ ] Sync group collapsed state
+- [x] Collapsable groups
+- [x] Sync group collapsed state
 - [ ] Sync group order
 - [ ] Include pinned tabs
 - [ ] Sync window name (as of now Chrome API doesn't support this)
-- [ ] Refresh button to force reconcile data
+- [x] Refresh button to force reconcile data
 - [ ] Option: reconcile data on focus
 - [ ] Share (shares list tab group URLs)
 - [ ] Tab group management from panel
@@ -58,7 +58,7 @@ A side panel extension to persist and manage tab groups via bookmarks. Displays 
   - [ ] Move tab (drag and drop)
   - [ ] Move tab group (drah and drop)
 - [ ] Trash (deleted items, empty trash)
-- [ ] Other Windows section, collapsable
+- [x] Other Windows section, collapsable
 - [ ] Empty state (no tab groups)
 - [ ] Onboarding
 - [ ] Click currently focused group should close the group in chrome

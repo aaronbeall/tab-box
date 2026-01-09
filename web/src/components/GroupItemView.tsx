@@ -14,7 +14,7 @@ interface GroupItemViewProps {
   onTabClick: (t: TabItem, g: GroupItem, w: WindowItem) => void;
   onCloseGroup: (e: React.MouseEvent, groupId: number) => void;
   onDeleteGroup: (e: React.MouseEvent, w: WindowItem, g: GroupItem) => void;
-  onDeleteTab: (e: React.MouseEvent, w: WindowItem, g: GroupItem, tabId: number | null) => void;
+  onDeleteTab: (e: React.MouseEvent, w: WindowItem, g: GroupItem, tabId: number | null, tabUrl?: string) => void;
   onDeleteClosedTabs: (e: React.MouseEvent, w: WindowItem, g: GroupItem) => void;
 }
 
@@ -131,7 +131,7 @@ export const GroupItemView: React.FC<GroupItemViewProps> = ({
                   />
                   <span className="min-w-0 flex-1 truncate">{t.title}</span>
                   <button
-                    onClick={(e) => onDeleteTab(e, window, group, t.id)}
+                    onClick={(e) => onDeleteTab(e, window, group, t.id, t.url)}
                     className="w-4 h-4 text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 flex items-center justify-center shrink-0 opacity-0 group-hover:opacity-100"
                     title="Delete tab"
                   >

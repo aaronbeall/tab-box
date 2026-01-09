@@ -180,10 +180,10 @@ export default function App() {
     await chrome.runtime.sendMessage({ type: 'deleteWindow', windowKey: w.key })
   }
 
-  const onDeleteTab = async (e: React.MouseEvent, w: WindowItem, g: GroupItem, tabId: number | null) => {
+  const onDeleteTab = async (e: React.MouseEvent, w: WindowItem, g: GroupItem, tabId: number | null, tabUrl?: string) => {
     e.stopPropagation()
     if (!confirm('Delete this tab permanently?')) return
-    await chrome.runtime.sendMessage({ type: 'deleteTab', windowKey: w.key, groupKey: g.key, tabId })
+    await chrome.runtime.sendMessage({ type: 'deleteTab', windowKey: w.key, groupKey: g.key, tabId, tabUrl })
   }
 
   const onDeleteClosedTabs = async (e: React.MouseEvent, w: WindowItem, g: GroupItem) => {

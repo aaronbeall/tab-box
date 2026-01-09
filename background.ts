@@ -730,7 +730,18 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         const data = await getStorage();
         if (data.windows[msg.windowKey] && data.windows[msg.windowKey].groups[msg.groupKey]) {
           const group = data.windows[msg.windowKey].groups[msg.groupKey];
-          group.tabs = group.tabs.filter(t => t.id !== msg.tabId);
+          if (msg.tabId !== null) {
+            group.tabs = group.tabs.filter(t => t.id !== msg.tabId);
+          } else if (msg.tabUrl) {
+            let removed = false;
+            group.tabs = group.tabs.filter((t) => {
+              if (!removed && t.id === null && t.url === msg.tabUrl) {
+                removed = true;
+                return false;
+              }
+              return true;
+            });
+          }
           await setStorage(data);
           sendResponse({ ok: true });
         } else {

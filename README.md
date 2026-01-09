@@ -36,3 +36,34 @@ A side panel extension to persist and manage tab groups via bookmarks. Displays 
 - Group metadata (title/color) is stored in a special bookmark inside the group folder (URL: `tabbox:meta`).
 - Tab list is rebuilt to reflect current group membership on changes.
 - This extension uses Manifest V3 and the Side Panel API with a React + Tailwind UI built via Vite.
+
+## Todo
+
+- [ ] Option: delete group if ungrouped
+- [ ] Export/Import
+- [ ] Account data sync
+- [ ] Collapsable groups
+- [ ] Sync group collapsed state
+- [ ] Sync group order
+- [ ] Include pinned tabs
+- [ ] Sync window name (as of now Chrome API doesn't support this)
+- [ ] Refresh button to force reconcile data
+- [ ] Option: reconcile data on focus
+- [ ] Share (shares list tab group URLs)
+- [ ] Tab group management from panel
+  - [ ] Edit group name/color
+  - [ ] Move group to window
+  - [ ] Merge group with other group
+  - [ ] Remove tab
+  - [ ] Move tab (drag and drop)
+  - [ ] Move tab group (drah and drop)
+- [ ] Trash (deleted items, empty trash)
+- [ ] Other Windows section, collapsable
+- [ ] Empty state (no tab groups)
+- [ ] Onboarding
+- [ ] Click currently focused group should close the group in chrome
+
+## Bugs
+- [ ] Detaching and re-attaching group to windows causes sync issues
+  - [ ] Drag group out of window -- it still appears in old window
+  - [ ] Dragging group into window caused all other groups in window to be shown as closed, clicking them caused duplicates -- reconcile fixed it

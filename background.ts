@@ -141,7 +141,8 @@ function moveStoredGroupToWindow(data: StorageData, fromWindowId: number, groupK
 // Helper: Map Chrome tabs to StorageTab format
 function mapTabsToStored(tabs: chrome.tabs.Tab[]): StorageTab[] {
   return tabs.map(t => ({
-    id: t.id ?? null,
+    id: t.id ?? -1,
+    closed: false,
     title: t.title || t.url || 'Untitled',
     url: t.url || ''
   }));
@@ -154,7 +155,7 @@ function mergeStoredTabs(chromeTabs: chrome.tabs.Tab[], storedTabs: StorageTab[]
   // Map stored tabs by ID for easy lookup
   const storedTabsById = new Map<number, StorageTab>();
   for (const storedTab of storedTabs) {
-    if (storedTab.id !== null) {
+    if (!storedTab.closed) {
       storedTabsById.set(storedTab.id, storedTab);
     }
   }
@@ -177,18 +178,20 @@ function mergeStoredTabs(chromeTabs: chrome.tabs.Tab[], storedTabs: StorageTab[]
     // Add the Chrome tab (always use current Chrome data)
     result.push({
       id: chromeId,
+      closed: false,
       title: chromeTitle,
       url: chromeUrl
     });
   }
 
-  // Second pass: iterate through remaining stored tabs that weren't updated, add as closed tabs (null id)
+  // Second pass: iterate through remaining stored tabs that weren't updated, add as closed tabs
   for (const storedTab of storedTabs) {
-    if (storedTab.id === null || !processedStoredIds.has(storedTab.id)) {
+    if (storedTab.closed || !processedStoredIds.has(storedTab.id)) {
       // This stored tab wasn't found in chromeTabs, add as closed
       result.push({
         ...storedTab,
-        id: null
+        id: -1,
+        closed: true
       });
     }
   }
@@ -199,7 +202,7 @@ function mergeStoredTabs(chromeTabs: chrome.tabs.Tab[], storedTabs: StorageTab[]
   const urlToClosedTab = new Map<string, StorageTab>();
 
   for (const tab of result) {
-    if (tab.id !== null) {
+    if (!tab.closed) {
       // Track open tabs by URL
       urlToOpenTab.set(tab.url, tab);
     }
@@ -207,7 +210,7 @@ function mergeStoredTabs(chromeTabs: chrome.tabs.Tab[], storedTabs: StorageTab[]
 
   const deduplicated: StorageTab[] = [];
   for (const tab of result) {
-    if (tab.id !== null) {
+    if (!tab.closed) {
       // Keep all open tabs
       deduplicated.push(tab);
     } else {
@@ -246,28 +249,28 @@ async function reconcileAllWindows() {
   // Mark closed windows and groups
   for (const wId in data.windows) {
     const w = data.windows[wId];
-    if (w.id !== null) {
+    if (!w.closed) {
       try {
         await chrome.windows.get(w.id);
 
         // Window exists, check groups
         for (const gKey in w.groups) {
           const g = w.groups[gKey];
-          if (g.id !== null) {
+          if (!g.closed) {
             try {
               await chrome.tabGroups.get(g.id);
             } catch {
               // Group doesn't exist
-              g.id = null;
+              g.closed = true;
             }
           }
         }
       } catch {
         // Window doesn't exist
-        w.id = null;
+        w.closed = true;
         // Mark all groups as closed
         for (const gKey in w.groups) {
-          w.groups[gKey].id = null;
+          w.groups[gKey].closed = true;
         }
       }
     }
@@ -292,7 +295,7 @@ async function reconcileWindow(window: StorageWindow) {
   if (!window.id) {
     // Window is already closed, just ensure all groups are marked as closed
     for (const gKey in window.groups) {
-      window.groups[gKey].id = null;
+      window.groups[gKey].closed = true;
     }
     const data = await getStorage();
     // Find this window in storage and update it
@@ -335,17 +338,17 @@ async function reconcileWindow(window: StorageWindow) {
       // Mark stored groups that don't exist in Chrome as closed
       for (const gKey in updatedWindow.groups) {
         const g = updatedWindow.groups[gKey];
-        if (g.id !== null && !chromeGroupIds.has(g.id)) {
-          g.id = null;
+        if (!g.closed && !chromeGroupIds.has(g.id)) {
+          g.closed = true;
         }
       }
       await setStorage(updatedData);
     }
   } catch {
     // Window doesn't exist in Chrome, mark it and all groups as closed
-    window.id = null;
+    window.closed = true;
     for (const gKey in window.groups) {
-      window.groups[gKey].id = null;
+      window.groups[gKey].closed = true;
     }
     const data = await getStorage();
     // Find this window in storage and update it
@@ -371,7 +374,9 @@ async function syncWindow(windowId: number) {
   // First try to lookup stored window by id
   if (data.windows[windowId]) {
     // Window already synced correctly
-    log('Window', windowId, 'found in storage, no action needed');
+    log('Window', windowId, 'found in storage, make sure it is marked open');
+    data.windows[windowId].closed = false;
+    await setStorage(data);
     return;
   }
 
@@ -388,7 +393,8 @@ async function syncWindow(windowId: number) {
     // Move window entry to new ID
     data.windows[windowId] = {
       ...storedWindow,
-      id: windowId
+      id: windowId,
+      closed: false
     };
     delete data.windows[oldWindowId];
 
@@ -404,6 +410,7 @@ async function syncWindow(windowId: number) {
     // Create new window entry
     data.windows[windowId] = {
       id: windowId,
+      closed: false,
       groups: {}
     };
     await setStorage(data);
@@ -465,6 +472,7 @@ async function syncTabGroup(groupId: number, windowId: number | null, updatePosi
   // Prepare updated group data
   const groupData: StorageGroup = {
     id: groupId,
+    closed: false,
     title: group.title || '',
     color: group.color || null,
     windowId: windowId,
@@ -535,10 +543,10 @@ async function focusOrOpenWindow(window: StorageWindow): Promise<number> {
   const data = await getStorage();
   const oldId = window.id;
 
-  // Find this window in storage by reference or old ID
+  // Find this window in storage by old ID
   let storedWindowId: number | null = null;
   for (const wId in data.windows) {
-    if (data.windows[wId] === window || parseInt(wId) === oldId) {
+    if (parseInt(wId) === oldId) {
       storedWindowId = parseInt(wId);
       break;
     }
@@ -548,6 +556,7 @@ async function focusOrOpenWindow(window: StorageWindow): Promise<number> {
     // Update window entry
     const storedWindow = data.windows[storedWindowId];
     storedWindow.id = newId;
+    storedWindow.closed = false;
 
     // Update all groups' windowId
     for (const gKey in storedWindow.groups) {
@@ -588,7 +597,7 @@ async function focusOrOpenGroup(group: StorageGroup, window: StorageWindow): Pro
 
   // Create new group in that window with stored tabs (excluding closed/history tabs)
   const createdTabIds: number[] = [];
-  const tabsToCreate = group.tabs.filter(t => t.id !== null);
+  const tabsToCreate = group.tabs.filter(t => !t.closed);
   for (const tab of tabsToCreate) {
     const newTab = await chrome.tabs.create({
       windowId,
@@ -637,12 +646,12 @@ async function focusOrOpenGroup(group: StorageGroup, window: StorageWindow): Pro
     // Update tabs: map created tab IDs back to the tabs that were created, keep closed tabs as-is
     let createdIdx = 0;
     stored.group.tabs = group.tabs.map((t) => {
-      if (t.id !== null && createdIdx < createdTabIds.length) {
+      if (!t.closed && createdIdx < createdTabIds.length) {
         // This tab was created, update its ID
         return { ...t, id: createdTabIds[createdIdx++] };
       } else {
         // This tab wasn't created (was closed/history), keep it as-is
-        return { ...t, id: null };
+        return { ...t, id: -1, closed: true };
       }
     });
 
@@ -709,10 +718,12 @@ async function focusOrOpenTab(tab: StorageTab, group: StorageGroup, window: Stor
     const storedTab = stored.group.tabs.find(t => t.url === tab.url);
     if (storedTab) {
       storedTab.id = newTab.id!;
+      storedTab.closed = false;
       storedTab.title = newTab.title || newTab.url || 'Untitled';
     } else {
       stored.group.tabs.push({
         id: newTab.id!,
+        closed: false,
         title: newTab.title || newTab.url || 'Untitled',
         url: newTab.url || ''
       });
@@ -790,7 +801,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         const data = await getStorage();
         if (data.windows[msg.windowKey] && data.windows[msg.windowKey].groups[msg.groupKey]) {
           const group = data.windows[msg.windowKey].groups[msg.groupKey];
-          group.tabs = group.tabs.filter(t => t.id !== null);
+          group.tabs = group.tabs.filter(t => !t.closed);
           await setStorage(data);
           sendResponse({ ok: true });
         } else {
@@ -888,10 +899,10 @@ chrome.windows.onRemoved.addListener(async (windowId) => {
     const data = await getStorage();
     const window = data.windows[windowId];
     if (window) {
-      window.id = null;
+      window.closed = true;
       // Also null out all groups in this window
       for (const gKey in window.groups) {
-        window.groups[gKey].id = null;
+        window.groups[gKey].closed = true;
       }
       await setStorage(data);
     }
@@ -922,7 +933,7 @@ chrome.tabGroups.onRemoved.addListener(async (group) => {
     log('Tab group removed:', group.id, 'from window', group.windowId);
     // Mark group as closed but keep data
     const data = await getStorage();
-    updateGroupEntry(data, group.id, (g) => { g.id = null });
+    updateGroupEntry(data, group.id, (g) => { g.closed = true });
     await setStorage(data);
   });
 });

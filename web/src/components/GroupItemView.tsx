@@ -39,10 +39,10 @@ export const GroupItemView: React.FC<GroupItemViewProps> = ({
   const headerBgHover = withAlpha(base, 0.26);
   const borderCol = withAlpha(base, 0.35);
   const tagText = readableTextColor(base);
-  const isGroupClosedInOpenWindow = !isWindowClosed && group.id === null;
+  const isGroupClosedInOpenWindow = !isWindowClosed && group.closed;
 
-  const openTabs = group.tabs.filter(t => t.id !== null);
-  const closedTabs = group.tabs.filter(t => t.id === null);
+  const openTabs = group.tabs.filter(t => !t.closed);
+  const closedTabs = group.tabs.filter(t => t.closed);
 
   return (
     <div
@@ -62,7 +62,7 @@ export const GroupItemView: React.FC<GroupItemViewProps> = ({
             <GroupLabel group={group} onClick={(e) => { e.stopPropagation(); onGroupClick(group, window); }} />
           </span>
         </div>
-        {group.id !== null ? (
+        {!group.closed ? (
           <button
             onClick={(e) => onCloseGroup(e, group.id!)}
             className="w-5 h-5 text-gray-600 dark:text-gray-300 hover:text-red-600 dark:hover:text-red-400 flex items-center justify-center shrink-0 -mr-1"

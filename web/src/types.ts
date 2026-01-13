@@ -7,7 +7,8 @@
  * A stored tab entry (may or may not be open in Chrome).
  */
 export interface StorageTab {
-  id: number | null; // Chrome tab ID (null if not open)
+  id: number; // Chrome tab ID
+  closed: boolean;
   title: string;
   url: string;
 }
@@ -16,10 +17,11 @@ export interface StorageTab {
  * A stored tab group (may or may not be open in Chrome).
  */
 export interface StorageGroup {
-  id: number | null; // Chrome group ID (null if not open)
+  id: number; // Chrome group ID
+  closed: boolean;
   title: string;
   color: chrome.tabGroups.ColorEnum | null;
-  windowId: number | null; // Chrome window ID (null if not open)
+  windowId: number; // Chrome window ID
   collapsed?: boolean; // Synced from Chrome tabGroup.collapsed state
   position?: number; // Index within window's tab groups
   tabs: StorageTab[];
@@ -29,7 +31,8 @@ export interface StorageGroup {
  * A stored window entry (may or may not be open in Chrome).
  */
 export interface StorageWindow {
-  id: number | null; // Chrome window ID (null if not open)
+  id: number; // Chrome window ID
+  closed: boolean;
   name?: string; // Optional user-defined name
   groups: Record<string, StorageGroup>; // keyed by group ID
 }

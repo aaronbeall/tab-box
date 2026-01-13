@@ -25,6 +25,7 @@ async function buildModel(): Promise<WindowItem[]> {
     }
     model.push({
       id: w.id,
+      closed: w.closed,
       key: windowKey,
       name: w.name,
       groups
@@ -78,8 +79,8 @@ export default function Panel() {
 
       const wg = w.groups.filter((g) => {
         const groupMatches = (g.title || '').toLowerCase().includes(q)
-        const openTabsMatch = g.tabs.filter(t => t.id !== null).some((t) => (t.title || '').toLowerCase().includes(q) || (t.url || '').toLowerCase().includes(q))
-        const closedTabsMatch = searchClosedTabs && g.tabs.filter(t => t.id === null).some((t) => (t.title || '').toLowerCase().includes(q) || (t.url || '').toLowerCase().includes(q))
+        const openTabsMatch = g.tabs.filter(t => !t.closed).some((t) => (t.title || '').toLowerCase().includes(q) || (t.url || '').toLowerCase().includes(q))
+        const closedTabsMatch = searchClosedTabs && g.tabs.filter(t => t.closed).some((t) => (t.title || '').toLowerCase().includes(q) || (t.url || '').toLowerCase().includes(q))
         return groupMatches || openTabsMatch || closedTabsMatch
       })
       const matchWindow = (w.name || '').toLowerCase().includes(q)
@@ -97,8 +98,8 @@ export default function Panel() {
       if (bIsCurrent && !aIsCurrent) return 1
 
       // Then sort by open/closed status
-      const aIsOpen = a.id !== null
-      const bIsOpen = b.id !== null
+      const aIsOpen = !a.closed
+      const bIsOpen = !b.closed
       if (aIsOpen && !bIsOpen) return -1
       if (bIsOpen && !aIsOpen) return 1
 
@@ -109,8 +110,8 @@ export default function Panel() {
     return list.map(w => ({
       ...w,
       groups: [...w.groups].sort((a, b) => {
-        const aIsOpen = a.id !== null
-        const bIsOpen = b.id !== null
+        const aIsOpen = !a.closed
+        const bIsOpen = !b.closed
         if (aIsOpen && !bIsOpen) return -1
         if (bIsOpen && !aIsOpen) return 1
         const posA = a.position ?? Number.MAX_SAFE_INTEGER
@@ -246,8 +247,8 @@ export default function Panel() {
         <div className="space-y-2 text-sm">
           {ordered.map((w, idx) => {
             const expanded = !!expandedWindows[w.key]
-            const isClosed = w.id === null
-            const isFirstClosed = isClosed && (idx === 0 || ordered[idx - 1].id !== null)
+            const isClosed = w.closed
+            const isFirstClosed = isClosed && (idx === 0 || !ordered[idx - 1].closed)
 
             return (
               <React.Fragment key={w.key}>
@@ -256,7 +257,7 @@ export default function Panel() {
                     title="Closed Windows"
                     isOpen={expandedClosedWindows}
                     onToggle={() => setExpandedClosedWindows(!expandedClosedWindows)}
-                    count={ordered.filter(w => w.id === null).length}
+                    count={ordered.filter(w => w.closed).length}
                   />
                 )}
                 {(!isClosed || expandedClosedWindows) && (
@@ -272,9 +273,9 @@ export default function Panel() {
                     onToggleClosedGroups={() => setExpandedClosedGroupsByWindow(prev => ({ ...prev, [w.key]: !(prev[w.key] ?? true) }))}
                   >
                     {w.groups.map((g, idx) => {
-                      const isFirstClosed = g.id === null && (idx === 0 || w.groups[idx - 1].id !== null);
+                      const isFirstClosed = g.closed && (idx === 0 || !w.groups[idx - 1].closed);
                       const closedGroupsExpanded = expandedClosedGroupsByWindow[w.key] ?? true;
-                      const shouldRender = g.id !== null || closedGroupsExpanded;
+                      const shouldRender = !g.closed || closedGroupsExpanded;
                       const isGroupExpanded = expandedGroups[g.key] !== undefined
                         ? expandedGroups[g.key]
                         : g.id != null && !(g.collapsed ?? true)
@@ -286,7 +287,7 @@ export default function Panel() {
                               title="Closed Groups"
                               isOpen={closedGroupsExpanded}
                               onToggle={() => setExpandedClosedGroupsByWindow(prev => ({ ...prev, [w.key]: !closedGroupsExpanded }))}
-                              count={w.groups.filter(g => g.id === null).length}
+                              count={w.groups.filter(g => g.closed).length}
                             />
                           )}
                           {shouldRender && (

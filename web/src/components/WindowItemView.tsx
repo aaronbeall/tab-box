@@ -30,10 +30,10 @@ export const WindowItemView: React.FC<WindowItemViewProps> = ({
   onToggleClosedGroups,
   children,
 }) => {
-  const isClosed = window.id === null;
+  const isClosed = window.closed;
 
-  const openGroups = window.groups.filter(g => g.id !== null);
-  const closedGroups = window.groups.filter(g => g.id === null);
+  const openGroups = window.groups.filter(g => !g.closed);
+  const closedGroups = window.groups.filter(g => g.closed);
 
   return (
     <div

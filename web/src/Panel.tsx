@@ -264,6 +264,8 @@ export default function Panel() {
                     onGroupClick={onGroupClick}
                     onDeleteWindow={onDeleteWindow}
                     onEditWindowName={onEditWindowName}
+                    closedGroupsOpen={expandedClosedGroupsByWindow[w.key] ?? true}
+                    onToggleClosedGroups={() => setExpandedClosedGroupsByWindow(prev => ({ ...prev, [w.key]: !(prev[w.key] ?? true) }))}
                   >
                     {w.groups.map((g, idx) => {
                       const isFirstClosed = g.id === null && (idx === 0 || w.groups[idx - 1].id !== null);

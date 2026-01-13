@@ -523,7 +523,7 @@ async function syncTabGroup(groupId: number, windowId: number | null, updatePosi
 // When called, we expect the storage data to be correctly synced
 // Missing or null ids indicate closed items that need to be opened and stored ids updated
 
-async function focusOrOpenWindow(window: StorageWindow): Promise<number> {
+async function focusOrOpenWindow(window: StorageWindow, restoreTabs: boolean = false): Promise<number> {
   // If window.id is provided, try to focus that window
   if (window.id) {
     try {
@@ -573,6 +573,19 @@ async function focusOrOpenWindow(window: StorageWindow): Promise<number> {
   }
 
   await chrome.windows.update(newId, { focused: true });
+
+  if (restoreTabs) {
+    // Just restore the first tab group, in the future we should not set closed to true for all groups, 
+    // then restore all the previously open groups
+    const storedWindow = data.windows[newId];
+    const groupKeys = Object.keys(storedWindow.groups);
+    if (groupKeys.length > 0) {
+      const firstGroupKey = groupKeys[0];
+      const firstGroup = storedWindow.groups[firstGroupKey];
+      await focusOrOpenGroup(firstGroup, storedWindow);
+    }
+  }
+
   return newId;
 }
 
@@ -739,7 +752,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   queue(async () => {
     try {
       if (msg && msg.type === "openWindow" && msg.window) {
-        const windowId = await focusOrOpenWindow(msg.window as StorageWindow);
+        const windowId = await focusOrOpenWindow(msg.window as StorageWindow, true);
         sendResponse({ ok: true, windowId });
       } else if (msg && msg.type === "openGroup" && msg.group && msg.window) {
         const groupId = await focusOrOpenGroup(msg.group as StorageGroup, msg.window as StorageWindow);

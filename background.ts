@@ -5,6 +5,14 @@ import type { StorageData, StorageWindow, StorageGroup, StorageTab } from './web
 
 const STORAGE_KEY = "tabbox";
 
+const log = (...args: any[]) => {
+  if (DEBUG) {
+    console.log('[TabBox]', ...args);
+  }
+};
+
+const DEBUG = true;
+
 async function getStorage(): Promise<StorageData> {
   const result = await chrome.storage.local.get(STORAGE_KEY);
   return result[STORAGE_KEY] || { windows: {} };
@@ -42,6 +50,7 @@ function findStoredGroupById(data: StorageData, groupId: number | null): { group
       }
     }
   }
+  log('findStoredGroupById: not found for ID:', groupId);
   return null;
 }
 
@@ -63,21 +72,31 @@ function findStoredGroupByTitle(data: StorageData, title: string, preferredWindo
       }
     }
   }
+  log('findStoredGroupByTitle:', title, 'preferredWindowId:', preferredWindowId, 'found match:', match);
   return match;
 }
 
 // Helper: Find stored window that best matches chrome window by group names
 async function findStoredWindowByGroups(data: StorageData, chromeWindowId: number): Promise<{ window: StorageWindow; storedWindowId: number } | null> {
-  const chromeGroups = await chrome.tabGroups.query({ windowId: chromeWindowId });
-  if (chromeGroups.length === 0) return null;
+  log('Finding stored window matching Chrome window:', chromeWindowId);
 
+  // Get Chrome tab group titles in this window
+  const chromeGroups = await chrome.tabGroups.query({ windowId: chromeWindowId });
   const chromeGroupTitles = chromeGroups.map(g => g.title ?? "").filter(Boolean);
   if (chromeGroupTitles.length === 0) return null;
 
+  log('Find stored window by Chrome group titles:', chromeGroupTitles);
   let bestMatch: { window: StorageWindow; storedWindowId: number; score: number } | null = null;
 
-  for (const wId in data.windows) {
-    const storedWindow = data.windows[wId];
+  // Filter out stored windows that are already attached to chrome windows
+  const chromeWindows = await chrome.windows.getAll();
+  const unsyncedWindows = Object.values(data.windows).filter(w => {
+    return !chromeWindows.some(cw => cw.id === w.id);
+  });
+
+  // Check each stored window for matching group titles
+  for (const wId in unsyncedWindows) {
+    const storedWindow = unsyncedWindows[wId];
     const storedGroupTitles = Object.values(storedWindow.groups).map(g => g.title).filter(Boolean);
 
     // Count matching group titles
@@ -87,6 +106,7 @@ async function findStoredWindowByGroups(data: StorageData, chromeWindowId: numbe
     }
   }
 
+  log('Best matching stored window:', bestMatch);
   return bestMatch ? { window: bestMatch.window, storedWindowId: bestMatch.storedWindowId } : null;
 }
 
@@ -105,6 +125,8 @@ function findStoredGroupByTabId(data: StorageData, tabId: number): StorageGroup 
 
 // Helper: Move group to different window in storage
 function moveStoredGroupToWindow(data: StorageData, fromWindowId: number, groupKey: string, toWindowId: number): void {
+  log('Moving stored group', groupKey, 'from window', fromWindowId, 'to window', toWindowId);
+
   const fromWindow = data.windows[fromWindowId];
   const toWindow = data.windows[toWindowId];
   if (!fromWindow || !toWindow) return;
@@ -342,11 +364,14 @@ async function reconcileWindow(window: StorageWindow) {
  * Updates all groups' windowId as needed
  */
 async function syncWindow(windowId: number) {
+  log('Syncing window:', windowId);
+
   const data = await getStorage();
 
   // First try to lookup stored window by id
   if (data.windows[windowId]) {
     // Window already synced correctly
+    log('Window', windowId, 'found in storage, no action needed');
     return;
   }
 
@@ -354,6 +379,8 @@ async function syncWindow(windowId: number) {
   const match = await findStoredWindowByGroups(data, windowId);
 
   if (match) {
+    log('Found matching stored window for window', windowId, ':', match);
+
     // Found a stored window with matching groups - update its ID
     const oldWindowId = match.storedWindowId;
     const storedWindow = match.window;
@@ -372,6 +399,8 @@ async function syncWindow(windowId: number) {
 
     await setStorage(data);
   } else {
+    log('No matching stored window found for window', windowId, ', creating new entry');
+
     // Create new window entry
     data.windows[windowId] = {
       id: windowId,
@@ -385,15 +414,29 @@ async function syncWindow(windowId: number) {
  * Ensures stored group exists and is up to date
  * Moves group to correct window as needed
  */
-async function syncTabGroup(groupId: number, windowId: number, updatePositions = false) {
+async function syncTabGroup(groupId: number, windowId: number | null, updatePositions = false) {
+  log('Syncing tab group:', groupId, 'in window:', windowId, 'updatePositions:', updatePositions);
   const group = await chrome.tabGroups.get(groupId).catch(() => null);
   if (!group) return;
 
   const tabs = await chrome.tabs.query({ groupId });
   const data = await getStorage();
 
+  // If windowId is null, remove group from stored group and exit
+  if (windowId === null) {
+    log('Window ID is null, removing stored group if exists:', groupId);
+    const stored = findStoredGroupById(data, groupId);
+    if (stored) {
+      stored.windowId = -1; // Mark as no window, should be attached to new new soon after this
+      delete data.windows[stored.windowId].groups[stored.groupKey];
+      await setStorage(data);
+    }
+    return;
+  }
+
   // Ensure window exists -- should exist by this point, maybe timing issue when detaching groups?
   if (!data.windows[windowId]) {
+    log('Window', windowId, 'not found in storage, syncing window and retrying group sync');
     await syncWindow(windowId);
     return syncTabGroup(groupId, windowId, updatePositions); // Retry after syncing window
   }
@@ -417,8 +460,7 @@ async function syncTabGroup(groupId: number, windowId: number, updatePositions =
   // Determine position from Chrome (position is stable/ordered); fallback to index if missing
   const chromeGroupsInWindow = await chrome.tabGroups.query({ windowId });
   const indexInWindow = chromeGroupsInWindow.findIndex(g => g.id === groupId);
-  const chromePosition = typeof group.position === 'number' ? group.position : undefined;
-  const groupPosition = chromePosition ?? (indexInWindow >= 0 ? indexInWindow : stored?.group.position ?? 0);
+  const groupPosition = indexInWindow >= 0 ? indexInWindow : stored?.group.position ?? 0;
 
   // Prepare updated group data
   const groupData: StorageGroup = {
@@ -432,6 +474,8 @@ async function syncTabGroup(groupId: number, windowId: number, updatePositions =
   };
 
   if (stored) {
+    log('Updating existing stored group:', stored, 'to', groupData);
+
     // Update existing stored group
     Object.assign(stored.group, groupData);
 
@@ -440,6 +484,8 @@ async function syncTabGroup(groupId: number, windowId: number, updatePositions =
       moveStoredGroupToWindow(data, stored.windowId, stored.groupKey, windowId);
     }
   } else {
+    log('Creating new stored group:', groupData);
+
     // Create new stored group entry
     data.windows[windowId].groups[groupId] = groupData;
   }
@@ -449,7 +495,7 @@ async function syncTabGroup(groupId: number, windowId: number, updatePositions =
     const winGroups = data.windows[windowId]?.groups;
     if (winGroups) {
       for (const cg of chromeGroupsInWindow) {
-        const pos = typeof cg.position === 'number' ? cg.position : chromeGroupsInWindow.findIndex(g => g.id === cg.id);
+        const pos = chromeGroupsInWindow.findIndex(g => g.id === cg.id);
         for (const key in winGroups) {
           const g = winGroups[key];
           if (g.id === cg.id) {
@@ -784,134 +830,171 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 // Handle context menu clicks
 chrome.contextMenus.onClicked.addListener(async (info) => {
   if (info.menuItemId === 'resync-all') {
-    console.log('[TabBox] Resyncing all data via context menu');
+    log('Resyncing all data via context menu');
     await reconcileAllWindows();
   }
 });
 
 // Event wiring
 chrome.runtime.onInstalled.addListener(async () => {
-  console.log('[TabBox] Extension installed, reconciling all data');
-  // setOptions may not be available in all Chrome versions
-  if (chrome.sidePanel && typeof chrome.sidePanel.setOptions === 'function') {
-    await chrome.sidePanel.setOptions({ path: "web/dist/index.html", enabled: true }).catch(() => { });
-  }
+  queue(async () => {
+    log('Extension installed, reconciling all data');
+    // setOptions may not be available in all Chrome versions
+    if (chrome.sidePanel && typeof chrome.sidePanel.setOptions === 'function') {
+      await chrome.sidePanel.setOptions({ path: "web/dist/index.html", enabled: true }).catch(() => { });
+    }
 
-  // Create context menu for action button
-  chrome.contextMenus.create({
-    id: 'resync-all',
-    title: 'Refresh Side Panel',
-    contexts: ['action']
+    // Create context menu for action button
+    chrome.contextMenus.create({
+      id: 'resync-all',
+      title: 'Refresh Side Panel',
+      contexts: ['action']
+    });
+
+    await reconcileAllWindows();
   });
-
-  await reconcileAllWindows();
 });
 
 chrome.runtime.onStartup?.addListener(async () => {
-  console.log('[TabBox] Chrome startup, reconciling all data');
-  await reconcileAllWindows();
+  queue(async () => {
+    log('Chrome startup, reconciling all data');
+    await reconcileAllWindows();
+  });
 });
 
 chrome.action.onClicked.addListener(async (tab) => {
-  if (tab && tab.windowId !== undefined) {
-    await chrome.sidePanel.open({ windowId: tab.windowId });
-  }
+  queue(async () => {
+    log('Action button clicked, opening side panel');
+    if (tab && tab.windowId !== undefined) {
+      await chrome.sidePanel.open({ windowId: tab.windowId });
+    }
+  });
 });
 
 // Chrome events trigger lightweight individual syncs
 chrome.windows.onFocusChanged.addListener(async (windowId) => {
-  console.log('[TabBox] Window focus changed:', windowId);
-  if (windowId === chrome.windows.WINDOW_ID_NONE) return;
-  // notify panel
-  chrome.runtime.sendMessage({ type: "windowFocused", windowId }).catch(() => { });
+  queue(async () => {
+    log('Window focus changed:', windowId);
+    if (windowId === chrome.windows.WINDOW_ID_NONE) return;
+    // notify panel
+    chrome.runtime.sendMessage({ type: "windowFocused", windowId }).catch(() => { });
+  });
 });
 
 chrome.windows.onRemoved.addListener(async (windowId) => {
-  console.log('[TabBox] Window removed:', windowId);
-  // Mark window and all its groups as closed but keep data
-  const data = await getStorage();
-  const window = data.windows[windowId];
-  if (window) {
-    window.id = null;
-    // Also null out all groups in this window
-    for (const gKey in window.groups) {
-      window.groups[gKey].id = null;
+  queue(async () => {
+    log('Window removed:', windowId);
+    // Mark window and all its groups as closed but keep data
+    const data = await getStorage();
+    const window = data.windows[windowId];
+    if (window) {
+      window.id = null;
+      // Also null out all groups in this window
+      for (const gKey in window.groups) {
+        window.groups[gKey].id = null;
+      }
+      await setStorage(data);
     }
-    await setStorage(data);
-  }
+  });
 });
 
 // Tab Groups sync - sync only the affected group
 chrome.tabGroups.onCreated.addListener(async (group) => {
-  console.log('[TabBox] Tab group created:', group.id, group.title);
-  await syncTabGroup(group.id, group.windowId, true);
+  queue(async () => {
+    log('Tab group created:', group.id, group.title, 'in window', group.windowId);
+    await syncTabGroup(group.id, group.windowId, true);
+  });
 });
 chrome.tabGroups.onUpdated.addListener(async (group) => {
-  console.log('[TabBox] Tab group updated:', group.id, group.title);
-  await syncTabGroup(group.id, group.windowId);
+  queue(async () => {
+    log('Tab group updated:', group.id, group.title, 'in window', group.windowId);
+    await syncTabGroup(group.id, group.windowId);
+  });
 });
 chrome.tabGroups.onMoved.addListener(async (group) => {
-  console.log('[TabBox] Tab group moved:', group.id, 'to window', group.windowId);
-  await syncTabGroup(group.id, group.windowId, true);
+  queue(async () => {
+    log('Tab group moved:', group.id, 'to window', group.windowId);
+    await syncTabGroup(group.id, group.windowId, true);
+  });
 });
 chrome.tabGroups.onRemoved.addListener(async (group) => {
-  console.log('[TabBox] Tab group removed:', group.id);
-  // Mark group as closed but keep data
-  const data = await getStorage();
-  updateGroupEntry(data, group.id, (g) => { g.id = null });
-  await setStorage(data);
-  // Update positions of remaining open groups in the window
-  if (group.windowId !== undefined) {
-    const chromeGroups = await chrome.tabGroups.query({ windowId: group.windowId }).catch(() => []);
-    if (chromeGroups.length > 0) {
-      const next = await getStorage();
-      const winGroups = next.windows[group.windowId]?.groups;
-      if (winGroups) {
-        chromeGroups.forEach((cg, idx) => {
-          const pos = typeof cg.position === 'number' ? cg.position : idx;
-          for (const key in winGroups) {
-            const g = winGroups[key];
-            if (g.id === cg.id) {
-              g.position = pos;
-              break;
-            }
-          }
-        });
-        await setStorage(next);
-      }
-    }
-  }
+  queue(async () => {
+    log('Tab group removed:', group.id, 'from window', group.windowId);
+    // Mark group as closed but keep data
+    const data = await getStorage();
+    updateGroupEntry(data, group.id, (g) => { g.id = null });
+    await setStorage(data);
+  });
 });
 
 // Tabs changes - sync the affected group
 chrome.tabs.onCreated.addListener(async (tab) => {
-  console.log('[TabBox] Tab created:', tab.id, 'groupId:', tab.groupId);
-  if (tab.groupId && tab.groupId !== -1) await syncTabGroup(tab.groupId, tab.windowId);
+  queue(async () => {
+    log('Tab created:', tab.id, 'groupId:', tab.groupId);
+    if (tab.groupId && tab.groupId !== -1) await syncTabGroup(tab.groupId, tab.windowId);
+  });
 });
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
-  if (tab.groupId && tab.groupId !== -1 && (changeInfo.url || changeInfo.title)) {
-    console.log('[TabBox] Tab updated:', tabId, 'groupId:', tab.groupId);
-    await syncTabGroup(tab.groupId, tab.windowId);
-  }
+  queue(async () => {
+    log('Tab updated:', tabId, 'groupId:', tab.groupId);
+    if (tab.groupId && tab.groupId !== -1 && (changeInfo.url || changeInfo.title)) {
+      await syncTabGroup(tab.groupId, tab.windowId);
+    }
+  });
 });
 chrome.tabs.onMoved.addListener(async (tabId, moveInfo) => {
-  console.log('[TabBox] Tab moved:', tabId, 'fromIndex:', moveInfo.fromIndex, 'toIndex:', moveInfo.toIndex);
-  const tab = await chrome.tabs.get(tabId);
-  if (tab.groupId && tab.groupId !== -1) await syncTabGroup(tab.groupId, moveInfo.windowId);
+  queue(async () => {
+    const tab = await chrome.tabs.get(tabId);
+    log('Tab moved:', tabId, 'fromIndex:', moveInfo.fromIndex, 'toIndex:', moveInfo.toIndex, 'groupId:', tab.groupId);
+    if (tab.groupId && tab.groupId !== -1) await syncTabGroup(tab.groupId, moveInfo.windowId);
+  });
 });
 chrome.tabs.onDetached.addListener(async (tabId, detachInfo) => {
-  console.log('[TabBox] Tab detached:', tabId, 'from window:', detachInfo.oldWindowId);
-  const tab = await chrome.tabs.get(tabId).catch(() => null);
-  if (tab && tab.groupId && tab.groupId !== -1) await syncTabGroup(tab.groupId, detachInfo.oldWindowId, true);
+  queue(async () => {
+    const tab = await chrome.tabs.get(tabId).catch(() => null);
+    log('Tab detached:', tabId, 'from window:', detachInfo.oldWindowId, 'groupId:', tab?.groupId);
+    if (tab && tab.groupId && tab.groupId !== -1) await syncTabGroup(tab.groupId, null, true);
+  });
 });
 chrome.tabs.onAttached.addListener(async (tabId, attachInfo) => {
-  console.log('[TabBox] Tab attached:', tabId, 'to window:', attachInfo.newWindowId);
-  const tab = await chrome.tabs.get(tabId).catch(() => null);
-  if (tab && tab.groupId && tab.groupId !== -1) await syncTabGroup(tab.groupId, attachInfo.newWindowId, true);
+  queue(async () => {
+    const tab = await chrome.tabs.get(tabId).catch(() => null);
+    log('Tab attached:', tabId, 'to window:', attachInfo.newWindowId, 'groupId:', tab?.groupId);
+    if (tab && tab.groupId && tab.groupId !== -1) await syncTabGroup(tab.groupId, attachInfo.newWindowId, true);
+  });
 });
 chrome.tabs.onRemoved.addListener(async (tabId, removeInfo) => {
-  console.log('[TabBox] Tab removed:', tabId);
-  const data = await getStorage();
-  const group = findStoredGroupByTabId(data, tabId);
-  if (group) await syncTabGroup(group.id!, removeInfo.windowId);
+  queue(async () => {
+    const data = await getStorage();
+    const group = findStoredGroupByTabId(data, tabId);
+    log('Tab removed:', tabId, 'groupId:', group?.id, 'from window:', removeInfo.windowId, 'isWindowClosing:', removeInfo.isWindowClosing);
+    if (group?.id) await syncTabGroup(group.id, removeInfo.windowId);
+  });
 });
+
+// Event queue to add all chrome events and execute them in order
+// This prevents race conditions
+
+const eventQueue: (() => Promise<void>)[] = [];
+let processingQueue = false;
+
+function queue(eventFn: () => Promise<void>) {
+  eventQueue.push(eventFn);
+  processEventQueue();
+}
+
+async function processEventQueue() {
+  if (processingQueue) return;
+  processingQueue = true;
+
+  while (eventQueue.length > 0) {
+    const eventFn = eventQueue.shift()!;
+    try {
+      await eventFn();
+    } catch (e) {
+      console.error('[TabBox] Error processing event:', e);
+    }
+  }
+
+  processingQueue = false;
+}

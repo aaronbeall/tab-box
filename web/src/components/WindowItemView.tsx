@@ -1,9 +1,9 @@
 import React from 'react';
-import { FiChevronDown, FiChevronRight, FiTrash2 } from 'react-icons/fi';
 import { GroupLabel } from './GroupLabel';
 import { EditableName } from './EditableName';
 import { CollapsableHeader } from './CollapsableHeader';
 import type { GroupItem, WindowItem } from '../types';
+import { MdDeleteForever, MdExpandMore } from 'react-icons/md';
 
 interface WindowItemViewProps {
   window: WindowItem;
@@ -48,7 +48,7 @@ export const WindowItemView: React.FC<WindowItemViewProps> = ({
             onClick={(e) => { e.stopPropagation(); onToggleExpand(window.key) }}
             className="mt-0.5 w-5 h-5 border border-gray-400 dark:border-zinc-600 rounded text-xs text-gray-600 dark:text-gray-300 grid place-items-center shrink-0 bg-white dark:bg-zinc-900"
           >
-            <FiChevronDown size={12} className={`transition-transform ${isExpanded ? '' : '-rotate-90'}`} />
+            <MdExpandMore size={12} className={`transition-transform ${isExpanded ? '' : '-rotate-90'}`} />
           </button>
           {isExpanded ? (
             <EditableName
@@ -116,7 +116,7 @@ export const WindowItemView: React.FC<WindowItemViewProps> = ({
             onClick={(e) => onDeleteWindow(e, window)}
             className="mt-0.5 w-5 h-5 text-gray-600 dark:text-gray-300 hover:text-red-600 dark:hover:text-red-400 flex items-center justify-center shrink-0"
           >
-            <FiTrash2 size={16} />
+            <MdDeleteForever size={16} />
           </button>
         )}
       </div>

@@ -1,4 +1,4 @@
-import { FiEdit } from "react-icons/fi";
+import { MdEdit } from "react-icons/md";
 
 export function EditableName({ name, countLabel, onEdit }: { name?: string; countLabel: string; onEdit: () => void }) {
   const hasName = !!name
@@ -17,7 +17,7 @@ export function EditableName({ name, countLabel, onEdit }: { name?: string; coun
         className="w-6 h-6 text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 flex items-center justify-center opacity-0 group-hover/name:opacity-100"
         title={hasName ? 'Edit window name' : 'Name window'}
       >
-        <FiEdit size={14} />
+        <MdEdit size={14} />
       </button>
     </div>
   )

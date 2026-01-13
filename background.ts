@@ -725,7 +725,7 @@ async function focusOrOpenTab(tab: StorageTab, group: StorageGroup, window: Stor
 
 // Messaging from panel
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-  (async () => {
+  queue(async () => {
     try {
       if (msg && msg.type === "openWindow" && msg.window) {
         const windowId = await focusOrOpenWindow(msg.window as StorageWindow);
@@ -823,7 +823,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     } catch (e) {
       sendResponse({ ok: false, error: String(e) });
     }
-  })();
+  });
   return true; // keep channel open for async
 });
 

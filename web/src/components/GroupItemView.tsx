@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { FiChevronDown, FiChevronRight, FiTrash2, FiX } from 'react-icons/fi';
 import { GroupLabel } from './GroupLabel';
 import type { GroupItem, TabItem, WindowItem } from '../types';
 import { colorToCss, readableTextColor, withAlpha } from '../utils';
+import { MdClear, MdDeleteForever, MdExpandMore } from 'react-icons/md';
 
 interface GroupItemViewProps {
   group: GroupItem;
@@ -57,7 +57,7 @@ export const GroupItemView: React.FC<GroupItemViewProps> = ({
         onClick={() => onToggleGroup(!isGroupExpanded)}
       >
         <div className="inline-flex items-center gap-1.5 flex-1">
-          <FiChevronDown size={14} className={`text-gray-600 dark:text-gray-300 transition-transform ${isGroupExpanded ? '' : '-rotate-90'}`} />
+          <MdExpandMore size={14} className={`text-gray-600 dark:text-gray-300 transition-transform ${isGroupExpanded ? '' : '-rotate-90'}`} />
           <span className="flex-1 min-w-0">
             <GroupLabel group={group} onClick={(e) => { e.stopPropagation(); onGroupClick(group, window); }} />
           </span>
@@ -68,7 +68,7 @@ export const GroupItemView: React.FC<GroupItemViewProps> = ({
             className="w-5 h-5 text-gray-600 dark:text-gray-300 hover:text-red-600 dark:hover:text-red-400 flex items-center justify-center shrink-0 -mr-1"
             title="Close group"
           >
-            <FiX size={16} />
+            <MdClear size={16} />
           </button>
         ) : (
           <button
@@ -76,7 +76,7 @@ export const GroupItemView: React.FC<GroupItemViewProps> = ({
             className="w-5 h-5 text-gray-600 dark:text-gray-300 hover:text-red-600 dark:hover:text-red-400 flex items-center justify-center shrink-0 -mr-1"
             title="Delete group"
           >
-            <FiTrash2 size={16} />
+            <MdDeleteForever size={16} />
           </button>
         )}
       </div>
@@ -107,11 +107,7 @@ export const GroupItemView: React.FC<GroupItemViewProps> = ({
             }}
             className="w-full flex items-center gap-1.5 px-2 py-1 text-xs text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-zinc-800/60"
           >
-            {expandedClosedTabs ? (
-              <FiChevronDown size={12} />
-            ) : (
-              <FiChevronRight size={12} />
-            )}
+            <MdExpandMore size={12} className={`transition-transform ${expandedClosedTabs ? '' : '-rotate-90'}`} />
             <span>History ({closedTabs.length})</span>
           </button>
           {expandedClosedTabs && (
@@ -135,7 +131,7 @@ export const GroupItemView: React.FC<GroupItemViewProps> = ({
                     className="w-4 h-4 text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 flex items-center justify-center shrink-0 opacity-0 group-hover:opacity-100"
                     title="Delete tab"
                   >
-                    <FiTrash2 size={12} />
+                    <MdDeleteForever size={12} />
                   </button>
                 </div>
               ))}
@@ -145,7 +141,7 @@ export const GroupItemView: React.FC<GroupItemViewProps> = ({
                 onClick={(e) => onDeleteClosedTabs(e, window, group)}
                 title="Clear all closed tabs"
               >
-                <FiTrash2 size={12} />
+                <MdDeleteForever size={12} />
                 <span>Clear history</span>
               </div>
             </div>

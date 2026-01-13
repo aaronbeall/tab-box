@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { FiInfo } from 'react-icons/fi'
+import { MdInfo, MdSearch } from 'react-icons/md';
 import { EditableName } from './components/EditableName'
 import { Switch } from './components/Switch';
 import { CollapsableHeader } from './components/CollapsableHeader';
 import { WindowItemView } from './components/WindowItemView';
 import { GroupItemView } from './components/GroupItemView';
 import type { GroupItem, StorageData, TabItem, WindowItem } from './types'
+
 
 async function buildModel(): Promise<WindowItem[]> {
   const response = await chrome.runtime.sendMessage({ type: 'getStorage' }).catch(() => ({ ok: false }))
@@ -206,13 +207,16 @@ export default function Panel() {
   return (
     <div className="flex flex-col h-screen bg-white dark:bg-zinc-900 text-gray-900 dark:text-gray-100">
       <header className="p-2 border-b border-gray-200 dark:border-zinc-800">
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="w-full px-3 py-2 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 border border-gray-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 placeholder-gray-500 dark:placeholder-gray-400"
-          placeholder="Search windows, groups, tabs"
-          type="search"
-        />
+        <div className="relative">
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full px-3 py-2 pl-6 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 border border-gray-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 placeholder-gray-500 dark:placeholder-gray-400"
+            placeholder="Search windows, groups, tabs"
+            type="search"
+          />
+          <MdSearch size={16} className="text-gray-500 dark:text-gray-400 pointer-events-none absolute top-3 left-2" />
+        </div>
         {q && (
           <div className="mt-2 flex flex-col gap-2">
             <div className="flex items-center gap-2">
@@ -233,7 +237,7 @@ export default function Panel() {
         )}
         {duplicateGroupNames.length > 0 && (
           <div className="mt-2 flex gap-2 p-2 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800/50 rounded text-xs text-blue-800 dark:text-blue-200">
-            <FiInfo size={14} className="shrink-0 mt-0.5" />
+            <MdInfo size={14} className="shrink-0 mt-0.5" />
             <span>Duplicate group names detected: <strong>{duplicateGroupNames.join(', ')}</strong>. Unique names help with reliable restoration across sessions.</span>
           </div>
         )}

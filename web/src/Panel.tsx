@@ -175,13 +175,13 @@ export default function Panel() {
 
   const onDeleteGroup = async (e: React.MouseEvent, w: WindowItem, g: GroupItem) => {
     e.stopPropagation()
-    if (!confirm('Delete this group and all its data?')) return
+    if (!confirm('Delete this group and all its data permanently?')) return
     await chrome.runtime.sendMessage({ type: 'deleteGroup', windowKey: w.key, groupKey: g.key })
   }
 
   const onDeleteWindow = async (e: React.MouseEvent, w: WindowItem) => {
     e.stopPropagation()
-    if (!confirm('Delete this window and all its groups?')) return
+    if (!confirm('Delete this window and all its groups permanently?')) return
     await chrome.runtime.sendMessage({ type: 'deleteWindow', windowKey: w.key })
   }
 
@@ -193,7 +193,7 @@ export default function Panel() {
 
   const onDeleteClosedTabs = async (e: React.MouseEvent, w: WindowItem, g: GroupItem) => {
     e.stopPropagation()
-    if (!confirm('Delete all closed tabs in this group?')) return
+    if (!confirm('Delete all closed tabs in this group permanently?')) return
     await chrome.runtime.sendMessage({ type: 'deleteClosedTabs', windowKey: w.key, groupKey: g.key })
   }
 

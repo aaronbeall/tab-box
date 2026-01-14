@@ -62,9 +62,11 @@ A side panel extension to persist and manage tab groups and windows in a vertica
   - [ ] Move tab group (drag and drop)
 - [ ] Trash (deleted items, empty trash)
 - [x] Other Windows section, collapsable
-- [ ] Empty state (no tab groups)
+- [x] Empty state (no tab groups)
 - [ ] Onboarding
-- [ ] Click currently focused group should collapse it (in panel and chrome) to make cycling easy
+- [x] Click currently focused group should collapse it (in panel and chrome) to make cycling easy
+- [ ] Pin groups, so they stay at the top of the list, search pinned groups
+- [ ] Archive groups
 
 ## Bugs
 - [x] Detaching and re-attaching group to windows causes sync issues

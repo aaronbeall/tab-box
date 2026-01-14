@@ -841,6 +841,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         } else {
           sendResponse({ ok: false, error: "Group not found" });
         }
+      } else if (msg && msg.type === "collapseGroup" && msg.group) {
+        // Collapse the tab group in Chrome and update storage
+        const group = msg.group as StorageGroup;
+        await chrome.tabGroups.update(group.id, { collapsed: true });
       } else {
         sendResponse({ ok: false, error: "Unknown message" });
       }

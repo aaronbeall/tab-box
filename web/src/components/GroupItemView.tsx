@@ -59,7 +59,19 @@ export const GroupItemView: React.FC<GroupItemViewProps> = ({
         <div className="inline-flex items-center gap-1.5 flex-1">
           <MdExpandMore size={14} className={`text-gray-600 dark:text-gray-300 transition-transform ${isGroupExpanded ? '' : '-rotate-90'}`} />
           <span className="flex-1 min-w-0">
-            <GroupLabel group={group} onClick={(e) => { e.stopPropagation(); onGroupClick(group, window); }} />
+            <GroupLabel
+              group={group}
+              onClick={async (e) => {
+                e.stopPropagation();
+                if (isGroupExpanded) {
+                  onToggleGroup(false);
+                  // Collapse group in Chrome
+                  await chrome.runtime.sendMessage({ type: 'collapseGroup', group });
+                } else {
+                  onGroupClick(group, window);
+                }
+              }}
+            />
           </span>
         </div>
         {!group.closed ? (

@@ -67,8 +67,8 @@ A side panel extension to persist and manage tab groups and windows in a vertica
 - [ ] Click currently focused group should collapse it (in panel and chrome) to make cycling easy
 
 ## Bugs
-- [ ] Detaching and re-attaching group to windows causes sync issues
-  - [ ] Drag group out of window -- it still appears in old window
-  - [ ] Dragging group into window caused all other groups in window to be shown as closed, clicking them caused duplicates -- reconcile fixed it
-  - [ ] Dragged group out of window, it ended up showing the old window as closed - refresh fixed
-- [ ] Opening closed group caused it to be duplicated, duplicate group did not have history (timing issue?)
+- [x] Detaching and re-attaching group to windows causes sync issues
+  - [x] Drag group out of window -- it still appears in old window
+  - [x] Dragging group into window caused all other groups in window to be shown as closed, clicking them caused duplicates -- reconcile fixed it
+  - [x] Dragged group out of window, it ended up showing the old window as closed - refresh fixed
+- [x] Opening closed group caused it to be duplicated, duplicate group did not have history (timing issue?)

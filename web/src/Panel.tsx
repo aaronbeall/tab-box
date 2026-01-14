@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
+import Icon128 from './assets/icon-128.png'
 import { MdInfo, MdSearch } from 'react-icons/md';
 import { EditableName } from './components/EditableName'
 import { Switch } from './components/Switch';
@@ -35,6 +36,7 @@ async function buildModel(): Promise<WindowItem[]> {
 }
 
 export default function Panel() {
+  const [isLoading, setIsLoading] = useState(true)
   const [model, setModel] = useState<WindowItem[]>([])
   const [search, setSearch] = useState('')
   const [currentWindowId, setCurrentWindowId] = useState<number | undefined>(undefined)
@@ -47,15 +49,20 @@ export default function Panel() {
 
   useEffect(() => {
     const load = async () => {
-      const m = await buildModel()
-      setModel(m)
-      const currentWindow = await chrome.windows.getCurrent()
-      setCurrentWindowId(currentWindow.id)
-      if (currentWindow.id) {
-        setExpandedWindows((prev) => {
-          const key = String(currentWindow.id)
-          return prev[key] !== undefined ? prev : { ...prev, [key]: true }
-        })
+      setIsLoading(true)
+      try {
+        const m = await buildModel()
+        setModel(m)
+        const currentWindow = await chrome.windows.getCurrent()
+        setCurrentWindowId(currentWindow.id)
+        if (currentWindow.id) {
+          setExpandedWindows((prev) => {
+            const key = String(currentWindow.id)
+            return prev[key] !== undefined ? prev : { ...prev, [key]: true }
+          })
+        }
+      } finally {
+        setIsLoading(false)
       }
     }
     load()
@@ -205,14 +212,29 @@ export default function Panel() {
     await chrome.runtime.sendMessage({ type: 'setWindowName', windowKey: w.key, name })
   }
 
+  if (isLoading) {
+    return (
+      <div className="flex flex-col h-screen bg-white dark:bg-zinc-900 text-gray-900 dark:text-gray-100">
+        <header className="p-2 border-b border-gray-200 dark:border-zinc-800">
+          <div className="h-8 w-full animate-pulse bg-gray-200 dark:bg-zinc-700 rounded-full" />
+        </header>
+        <main className="p-2 flex-1 flex items-center justify-center">
+          <div className="text-gray-500 dark:text-gray-400">Loading...</div>
+        </main>
+      </div>
+    )
+  }
+
+  const isEmpty = model.length === 0;
+
   return (
-    <div className="flex flex-col h-screen bg-white dark:bg-zinc-900 text-gray-900 dark:text-gray-100">
+    <div className="flex flex-col h-screen bg-blue-50 dark:bg-zinc-900 text-gray-900 dark:text-gray-100">
       <header className="p-2 border-b border-gray-200 dark:border-zinc-800">
         <div className="relative">
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full px-3 py-2 pl-8 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 border border-gray-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 placeholder-gray-500 dark:placeholder-gray-400"
+            className="w-full px-3 py-2 pl-8 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-zinc-800 placeholder-gray-500 dark:placeholder-gray-400 shadow-sm border-0"
             placeholder="Search windows, groups, tabs"
             type="search"
           />
@@ -245,6 +267,16 @@ export default function Panel() {
       </header>
       <main className="p-2 overflow-auto">
         <div className="space-y-2 text-sm">
+          {isEmpty && (
+            <div className="flex flex-col items-center justify-center py-12 text-gray-500 dark:text-gray-400">
+              <img src={Icon128} className="w-16 h-16 mb-4" aria-label="Tab Box Logo" />
+              <div className="text-lg font-semibold mb-2">Welcome to Tab Box!</div>
+              <div className="max-w-xs text-center text-sm">
+                To get started, create tab groups in your browser. They will be automatically synced, backed up and shown here.<br />
+                Tab groups help you organize your browsing and quickly restore sessions. Enjoy a more productive workflow!
+              </div>
+            </div>
+          )}
           {ordered.map((w, idx) => {
             const expanded = !!expandedWindows[w.key]
             const isClosed = w.closed
@@ -313,8 +345,11 @@ export default function Panel() {
               </React.Fragment>
             )
           })}
-          {!filtered.length && (
-            <div className="text-gray-500 dark:text-gray-400">No items found.</div>
+          {!filtered.length && !isEmpty && (
+            <div className="flex flex-col items-center justify-center py-12 text-gray-500 dark:text-gray-400">
+              <img src={Icon128} className="w-12 h-12 mb-3" aria-label="Tab Box Logo" />
+              <div className="text-base font-medium mb-1">No items found.</div>
+            </div>
           )}
         </div>
       </main>

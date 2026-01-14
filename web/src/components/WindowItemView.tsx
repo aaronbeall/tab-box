@@ -37,7 +37,7 @@ export const WindowItemView: React.FC<WindowItemViewProps> = ({
 
   return (
     <div
-      className={`border border-gray-200 dark:border-zinc-800 rounded-md ${isClosed ? 'opacity-50 bg-gray-50 dark:bg-zinc-900/30' : ''}`}
+      className={`bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-md ${isClosed ? 'opacity-50 bg-gray-50 dark:bg-zinc-900/30' : ''}`}
     >
       <div
         className="flex items-start justify-between cursor-pointer select-none px-2 py-1 rounded-md hover:bg-gray-50 dark:hover:bg-zinc-800/60"

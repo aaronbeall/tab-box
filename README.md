@@ -2,6 +2,9 @@
 
 A side panel extension to persist and manage tab groups and windows in a vertical side panel. Displays a tree of Window → Tab Group → Tab, and closed windows, groups, or tabs are remembered in the panel to be re-opened at any time you want.
 
+<img width="377" height="799" alt="image" src="https://github.com/user-attachments/assets/798dd4e5-a13c-4387-8a4f-c29160dac409" />
+
+
 ## Features
 
 - Side panel with a searchable tree: Window → Tab Group → Tab

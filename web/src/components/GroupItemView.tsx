@@ -131,7 +131,7 @@ export const GroupItemView: React.FC<GroupItemViewProps> = ({
                     className="w-4 h-4 text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 flex items-center justify-center shrink-0 opacity-0 group-hover:opacity-100"
                     title="Delete tab"
                   >
-                    <MdDeleteForever size={12} />
+                    <MdDeleteForever size={16} />
                   </button>
                 </div>
               ))}

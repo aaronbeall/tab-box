@@ -80,20 +80,19 @@ Chrome will scan the extension and populate basic fields from `manifest.json`. C
 ### Required Fields
 
 - **Name:** Tab Box
-- **Summary:** Persist and manage tab groups with a searchable side panel backed by bookmarks.
+- **Summary:** Persist and manage tab groups with a searchable vertical side panel.
 - **Full description:**
   ```
   Tab Box is a Chrome extension that helps you organize and persist tab groups 
-  with a clean side panel UI. All groups are automatically synced to your bookmarks, 
+  with a clean side panel UI. All groups are automatically synced and saved when closed, 
   so they persist even after closing and reopening groups.
 
   Features:
   - Tree view of Windows → Tab Groups → Tabs
   - Full-text search across windows, groups, and tab URLs
-  - Auto-expand the currently focused window
   - Click to focus/open/recreate windows, groups, and tabs
   - Automatic sync with browser tab groups
-  - Persistent tab group storage via bookmarks
+  - Persistent tab group storage
 
   Closed tab groups are not deleted—reopen them anytime from the side panel.
   ```

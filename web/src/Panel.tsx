@@ -16,6 +16,8 @@ async function buildModel(): Promise<WindowItem[]> {
   const model: WindowItem[] = []
   for (const windowKey in data.windows) {
     const w = data.windows[windowKey]
+    // For demo purposes, omit my personal data
+    // if (['Dev', 'Personal', 'Projects', 'Decision Lens', 'Trading'].some(n => (w.name || '').includes(n))) continue
     const groups: GroupItem[] = []
     for (const groupKey in w.groups) {
       const g = w.groups[groupKey]

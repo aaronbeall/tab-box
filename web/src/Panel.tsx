@@ -212,11 +212,11 @@ export default function Panel() {
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full px-3 py-2 pl-6 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 border border-gray-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 placeholder-gray-500 dark:placeholder-gray-400"
+            className="w-full px-3 py-2 pl-8 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 border border-gray-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 placeholder-gray-500 dark:placeholder-gray-400"
             placeholder="Search windows, groups, tabs"
             type="search"
           />
-          <MdSearch size={16} className="text-gray-500 dark:text-gray-400 pointer-events-none absolute top-3 left-2" />
+          <MdSearch size={16} className="text-gray-500 dark:text-gray-400 pointer-events-none absolute top-3 left-3" />
         </div>
         {q && (
           <div className="mt-2 flex flex-col gap-2">

@@ -6,8 +6,9 @@ A side panel extension to persist and manage tab groups and windows in a vertica
 
 - Side panel with a searchable tree: Window → Tab Group → Tab
 - Syncs current tab groups to panel automatically (create/update/move)
-- Closing a tab group does not remove it from Tab Box (persisted)
-- Clicking a tab group focuses it, or re-opens it in the window
+- Closing a tab group does not remove it from Tab Box
+- Closing a tab in a group keeps in group-level history in Tab Box
+- Clicking a tab group in Tab Box focuses it, or re-opens it in the window it was in
 
 ## Install (Unpacked)
 
@@ -22,18 +23,11 @@ A side panel extension to persist and manage tab groups and windows in a vertica
 4. Click "Load unpacked" and select this folder.
 4. Pin the extension (optional). Click the extension icon to open the side panel.
 
-## Usage
-
-- The extension will create a bookmarks folder named "Tab Box" (under Other bookmarks) and maintain Window folders and Group subfolders with tab bookmarks.
-- Use the search input at the top to filter windows, groups, or tabs by name or URL.
-- Clicking a window node focuses the existing window or creates a new window from its saved groups.
-- Clicking a group node focuses the existing group if present; otherwise, re-creates the group in the focused window.
-- Clicking a tab node focuses the existing tab with the same URL or opens it if not present.
-
 ## Notes
 
-- Group metadata (title/color) is stored in a special bookmark inside the group folder (URL: `tabbox:meta`).
-- Tab list is rebuilt to reflect current group membership on changes.
+- Tihs extension syncs tab state is stored in `chrome.storage.local` API
+- On browser or window restart, restored tabs and groups get new Chrome IDs, so Tab Box must do a name based reconciliation with stored data -- duplicate group names can cause problems
+- Chrome events are not always completely reliable, use right-click on the extension icon and "Refresh Side Panel" to attempt to resync
 - This extension uses Manifest V3 and the Side Panel API with a React + Tailwind UI built via Vite.
 
 ## Todo

@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Tab Box",
-  "version": "0.1.0",
-  "description": "Persist and manage tab groups via bookmarks, with a side panel tree.",
+  "version": "1.1.0",
+  "description": "Persist and manage tab groups with a searchable vertical side panel, per group tab history, and session restore.",
   "permissions": [
     "tabs",
     "tabGroups",

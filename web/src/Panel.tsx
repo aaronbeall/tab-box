@@ -15,12 +15,12 @@ async function buildModel(): Promise<WindowItem[]> {
   const data = response.data as StorageData;
   const model: WindowItem[] = []
   for (const windowKey in data.windows) {
-    const w = data.windows[windowKey]
+    const w = data.windows[windowKey]!
     // For demo purposes, omit my personal data
     // if (['Dev', 'Personal', 'Projects', 'Decision Lens', 'Trading'].some(n => (w.name || '').includes(n))) continue
     const groups: GroupItem[] = []
     for (const groupKey in w.groups) {
-      const g = w.groups[groupKey]
+      const g = w.groups[groupKey]!
       groups.push({
         ...g,
         key: groupKey
@@ -282,7 +282,7 @@ export default function Panel() {
           {ordered.map((w, idx) => {
             const expanded = !!expandedWindows[w.key]
             const isClosed = w.closed
-            const isFirstClosed = isClosed && (idx === 0 || !ordered[idx - 1].closed)
+            const isFirstClosed = isClosed && (idx === 0 || !ordered[idx - 1]?.closed)
 
             return (
               <React.Fragment key={w.key}>
@@ -307,12 +307,12 @@ export default function Panel() {
                     onToggleClosedGroups={() => setExpandedClosedGroupsByWindow(prev => ({ ...prev, [w.key]: !(prev[w.key] ?? true) }))}
                   >
                     {w.groups.map((g, idx) => {
-                      const isFirstClosed = g.closed && (idx === 0 || !w.groups[idx - 1].closed);
+                      const isFirstClosed = g.closed && (idx === 0 || !w.groups[idx - 1]?.closed);
                       const closedGroupsExpanded = expandedClosedGroupsByWindow[w.key] ?? true;
                       const shouldRender = !g.closed || closedGroupsExpanded;
                       const isGroupExpanded = expandedGroups[g.key] !== undefined
-                        ? expandedGroups[g.key]
-                        : g.id != null && !(g.collapsed ?? true)
+                        ? !!expandedGroups[g.key]
+                        : !g.closed && !(g.collapsed ?? true)
 
                       return (
                         <React.Fragment key={g.key}>

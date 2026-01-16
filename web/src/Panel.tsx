@@ -195,7 +195,7 @@ export default function Panel() {
     await chrome.runtime.sendMessage({ type: 'deleteWindow', windowKey: w.key })
   }
 
-  const onDeleteTab = async (e: React.MouseEvent, w: WindowItem, g: GroupItem, tabId: number | null, tabUrl?: string) => {
+  const onDeleteTab = async (e: React.MouseEvent, w: WindowItem, g: GroupItem, tabId: number, tabUrl?: string) => {
     e.stopPropagation()
     if (!confirm('Delete this tab permanently?')) return
     await chrome.runtime.sendMessage({ type: 'deleteTab', windowKey: w.key, groupKey: g.key, tabId, tabUrl })

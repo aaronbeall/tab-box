@@ -14,7 +14,7 @@ interface GroupItemViewProps {
   onTabClick: (t: TabItem, g: GroupItem, w: WindowItem) => void;
   onCloseGroup: (e: React.MouseEvent, groupId: number) => void;
   onDeleteGroup: (e: React.MouseEvent, w: WindowItem, g: GroupItem) => void;
-  onDeleteTab: (e: React.MouseEvent, w: WindowItem, g: GroupItem, tabId: number | null, tabUrl?: string) => void;
+  onDeleteTab: (e: React.MouseEvent, w: WindowItem, g: GroupItem, tabId: number, tabUrl?: string) => void;
   onDeleteClosedTabs: (e: React.MouseEvent, w: WindowItem, g: GroupItem) => void;
 }
 

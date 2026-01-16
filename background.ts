@@ -143,7 +143,7 @@ function moveStoredGroupToWindow(data: StorageData, fromWindowId: number, groupK
 // Helper: Map Chrome tabs to StorageTab format
 function mapTabsToStored(tabs: chrome.tabs.Tab[]): StorageTab[] {
   return tabs.map(t => ({
-    id: t.id ?? -1,
+    id: t.id!,
     closed: false,
     title: t.title || t.url || 'Untitled',
     url: t.url || ''
@@ -192,7 +192,6 @@ function mergeStoredTabs(chromeTabs: chrome.tabs.Tab[], storedTabs: StorageTab[]
       // This stored tab wasn't found in chromeTabs, add as closed
       result.push({
         ...storedTab,
-        id: -1,
         closed: true
       });
     }
@@ -679,7 +678,7 @@ async function focusOrOpenGroup(group: StorageGroup, window: StorageWindow): Pro
         return { ...t, id: createdTabIds[createdIdx++]! };
       } else {
         // This tab wasn't created (was closed/history), keep it as-is
-        return { ...t, id: -1, closed: true };
+        return { ...t, closed: true };
       }
     });
 
@@ -827,8 +826,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         }
       } else if (msg && msg.type === "deleteClosedTabs" && msg.windowKey && msg.groupKey) {
         const data = await getStorage();
-        if (data.windows[msg.windowKey]?.groups[msg.groupKey]) {
-          const group = data.windows[msg.windowKey]?.groups[msg.groupKey]!;
+        const group = data.windows[msg.windowKey]?.groups[msg.groupKey];
+        if (group) {
           group.tabs = group.tabs.filter(t => !t.closed);
           await setStorage(data);
           sendResponse({ ok: true });
@@ -837,9 +836,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         }
       } else if (msg && msg.type === "deleteTab" && msg.windowKey && msg.groupKey && msg.tabId !== undefined) {
         const data = await getStorage();
-        if (data.windows[msg.windowKey]?.groups[msg.groupKey]) {
-          const group = data.windows[msg.windowKey]?.groups[msg.groupKey]!;
-          if (msg.tabId !== null) {
+        const group = data.windows[msg.windowKey]?.groups[msg.groupKey]
+        if (group) {
+          if (msg.tabId > -1) {
             group.tabs = group.tabs.filter(t => t.id !== msg.tabId);
           } else if (msg.tabUrl) {
             let removed = false;

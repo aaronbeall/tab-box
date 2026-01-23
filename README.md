@@ -73,3 +73,4 @@ A side panel extension to persist and manage tab groups and windows in a vertica
   - [x] Dragging group into window caused all other groups in window to be shown as closed, clicking them caused duplicates -- reconcile fixed it
   - [x] Dragged group out of window, it ended up showing the old window as closed - refresh fixed
 - [x] Opening closed group caused it to be duplicated, duplicate group did not have history (timing issue?)
+- [x] Re-opening and restoring tabs caused a shit ton of duplicates

@@ -90,13 +90,11 @@ async function findStoredWindowByGroups(data: StorageData, chromeWindowId: numbe
 
   // Filter out stored windows that are already attached to chrome windows
   const chromeWindows = await chrome.windows.getAll();
-  const unsyncedWindows = Object.values(data.windows).filter(w => {
-    return !chromeWindows.some(cw => cw.id === w.id);
-  });
 
   // Check each stored window for matching group titles
-  for (const wId in unsyncedWindows) {
-    const storedWindow = unsyncedWindows[wId];
+  for (const wId in data.windows) {
+    if (chromeWindows.some(cw => cw.id === data.windows[wId]?.id)) continue; // Skip stored windows already attached to Chrome windows
+    const storedWindow = data.windows[wId];
     if (storedWindow) {
       const storedGroupTitles = Object.values(storedWindow.groups).map(g => g.title).filter(Boolean);
 
@@ -910,12 +908,10 @@ chrome.runtime.onStartup?.addListener(async () => {
 });
 
 chrome.action.onClicked.addListener(async (tab) => {
-  queue(async () => {
-    log('Action button clicked, opening side panel');
-    if (tab && tab.windowId !== undefined) {
-      await chrome.sidePanel.open({ windowId: tab.windowId });
-    }
-  });
+  log('Action button clicked, opening side panel');
+  if (tab && tab.windowId !== undefined) {
+    await chrome.sidePanel.open({ windowId: tab.windowId });
+  }
 });
 
 // Chrome events trigger lightweight individual syncs

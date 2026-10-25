@@ -11,8 +11,8 @@ import type { GroupItem, StorageData, TabItem, WindowItem } from './types'
 
 
 async function buildModel(): Promise<WindowItem[]> {
-  const response = await chrome.runtime.sendMessage({ type: 'getStorage' }).catch(() => ({ ok: false }))
-  if (!response.ok || !response.data) return []
+  const response = await chrome.runtime.sendMessage({ type: 'getStorage' })
+  if (!response?.ok || !response.data) throw new Error('Could not load saved tabs')
   const data = response.data as StorageData;
   const model: WindowItem[] = []
   for (const windowKey in data.windows) {
@@ -42,6 +42,7 @@ export default function Panel() {
   const settingsButton = useRef<HTMLButtonElement>(null)
   const [showSettings, setShowSettings] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
   const [model, setModel] = useState<WindowItem[]>([])
   const [search, setSearch] = useState('')
   const [currentWindowId, setCurrentWindowId] = useState<number | undefined>(undefined)
@@ -53,12 +54,15 @@ export default function Panel() {
   const [expandedClosedGroupsByWindow, setExpandedClosedGroupsByWindow] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
+    let latestRequest = 0
+    let disposed = false
     const load = async () => {
-      setIsLoading(true)
+      const request = ++latestRequest
       try {
-        const m = await buildModel()
+        const [m, currentWindow] = await Promise.all([buildModel(), chrome.windows.getCurrent()])
+        if (disposed || request !== latestRequest) return
         setModel(m)
-        const currentWindow = await chrome.windows.getCurrent()
+        setLoadError(false)
         setCurrentWindowId(currentWindow.id)
         if (currentWindow.id) {
           setExpandedWindows((prev) => {
@@ -66,8 +70,10 @@ export default function Panel() {
             return prev[key] !== undefined ? prev : { ...prev, [key]: true }
           })
         }
+      } catch {
+        if (!disposed && request === latestRequest) setLoadError(true)
       } finally {
-        setIsLoading(false)
+        if (!disposed && request === latestRequest) setIsLoading(false)
       }
     }
     load()
@@ -77,7 +83,10 @@ export default function Panel() {
       }
     }
     chrome.runtime.onMessage.addListener(listener)
-    return () => chrome.runtime.onMessage.removeListener(listener)
+    return () => {
+      disposed = true
+      chrome.runtime.onMessage.removeListener(listener)
+    }
   }, [])
 
   const q = search.toLowerCase().trim()
@@ -273,6 +282,7 @@ export default function Panel() {
             </div>
           </div>
         )}
+        {loadError && <p role="alert" className="mt-2 text-xs text-red-700 dark:text-red-300">Couldn’t refresh saved tabs. Reopen Tab Box to try again.</p>}
         {duplicateGroupNames.length > 0 && (
           <div className="mt-2 flex gap-2 p-2 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800/50 rounded text-xs text-blue-800 dark:text-blue-200">
             <MdInfo size={14} className="shrink-0 mt-0.5" />

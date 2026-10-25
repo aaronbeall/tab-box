@@ -1,6 +1,25 @@
 # Performance and correctness review
 
-These are recommendations from source inspection, not implemented fixes. They concern existing behavior. The new exclusion and backup features have separate automated coverage. Priorities reflect risk of data loss or incorrect restoration before speed.
+The original findings are retained below as a review record. Confirmed correctness issues now have regression tests and individual fix commits. Tests exercise the production background worker with controlled Chrome API events/storage and the actual React panel with React Test Renderer; they do not claim an end-to-end Chrome restart test.
+
+## Resolution and reproduction coverage
+
+| Finding | Status | Regression coverage |
+| --- | --- | --- |
+| 1. Title-only group identity | Fixed | Same-window, cross-window and unnamed live groups remain distinct; ambiguous/unrelated archives stay intact; matching archives retain history. |
+| 2. Stale session IDs | Fixed | Persisted IDs detach before a new browser session; reused IDs cannot target archived entries; worker restarts keep valid bindings; content-based restart reconciliation preserves names/history. |
+| 3. Manual refresh races | Fixed | A storage read is deliberately paused while a rename is queued; refresh completes before the edit and cannot overwrite it. |
+| 4. Membership changes | Fixed | Group-only updates reconcile source/destination; ungrouped tabs become history; removing a previously moved tab updates its live group rather than an old history entry. |
+| 5. Detach lookup | Fixed | Original membership closes while history remains recoverable, including when the Chrome group disappears; attach moves the preserved entry to its destination. |
+| 6. History-only restore | Fixed | Restoring retains a live new-tab placeholder, preserves history, and supports opening a history tab into the new group. Partial-restore rollback remains a separate suggestion. |
+| 7. Excess reconciliation work | Deferred optimization | A controlled one-window / 20-group refresh originally performed 22 full-storage reads and writes. No user-visible latency benchmark established. |
+| 8. Panel remount/race/failure | Fixed | Tree and expanded history survive a pending refresh; late responses cannot overwrite newer data; failed refresh keeps the last view and displays an error. |
+| 9. Search/focus | Not established as a practical bug | The owning-window interpretation is intentional; a missing memo dependency alone did not establish a user-visible failure. |
+| 10. Logging/history limits | Logging fixed; retention deferred | Normal synchronization produces no debug logs. No quota failure was reproduced; retention remains optional hardening. |
+
+Run `npm test` to reproduce the covered scenarios. Regression tests were observed failing before their corresponding fixes and passing afterward. Use `npm run typecheck` and `npm run build` for compilation checks.
+
+## Original findings
 
 1. **High: stop reconciling distinct live groups by title alone.** `findStoredGroupByTitle` in `background.ts` returns the first title match, including an already-open group, and can fall back to another window. Two open groups named “Research” can overwrite or move each other's saved entry. Match only unattached candidates, score tab URL overlap, and preserve separate entries when ambiguous. Test duplicate and empty names across windows and after restart.
 
@@ -22,4 +41,4 @@ These are recommendations from source inspection, not implemented fixes. They co
 
 10. **Low: bound retained history and disable verbose production logging.** History has no retention/size policy; every update handles the entire saved collection. Add an optional retention cap and explicit storage-quota feedback. `DEBUG = true` also logs whole stored groups with browsing URLs during normal operation; make detailed logs opt-in.
 
-Suggested follow-up order: identity/reconciliation safeguards, queued refresh and group-membership handling, restoration edge cases, then batched storage and panel updates. No commits were created.
+Remaining optional work: batched reconciliation, history retention, and rollback for partially failed multi-tab restores. These have not been implemented as part of the confirmed-issue fixes.

@@ -33,7 +33,7 @@ A side panel extension to persist and manage tab groups and windows in a vertica
 ## Notes
 
 - Tab state is stored locally using `chrome.storage.local`; automatic account/device sync is not provided.
-- On browser or window restart, restored tabs and groups get new Chrome IDs, so Tab Box must do a name based reconciliation with stored data -- duplicate group names can cause problems
+- Chrome IDs are detached when a new browser session starts. Tab Box reconciles archived windows/groups using names and tab URLs; ambiguous matches stay separate to preserve saved data.
 - Chrome events are not always completely reliable, use right-click on the extension icon and "Refresh Side Panel" to attempt to resync
 - This extension uses Manifest V3 and the Side Panel API with a React + Tailwind UI built via Vite.
 
@@ -59,7 +59,7 @@ npm run typecheck
 npm run build
 ```
 
-Tests cover pattern matching, defaults, history filtering, window exclusion persistence, live group changes, backup validation, portable IDs, and queued worker operations using a mocked Chrome API. Reload the unpacked extension after building. See [REVIEW.md](REVIEW.md) for suggested performance and correctness fixes that have not been implemented.
+Tests cover exclusions/backups, duplicate group names, refresh/edit races, tab membership and detaching, history-only restores, browser-session identities, and panel state during asynchronous refreshes. Worker tests use a mocked Chrome API; component tests use the real React panel. Reload the unpacked extension after building. See [REVIEW.md](REVIEW.md) for resolved findings, regression coverage, and deferred improvements.
 
 ## Todo
 

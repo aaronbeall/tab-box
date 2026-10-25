@@ -429,23 +429,23 @@ async function syncWindow(windowId: number) {
  */
 async function syncTabGroup(groupId: number, windowId: number | null, updatePositions = false) {
   log('Syncing tab group:', groupId, 'in window:', windowId, 'updatePositions:', updatePositions);
-  const group = await chrome.tabGroups.get(groupId).catch(() => null);
-  if (!group) return;
-
-  const tabs = await chrome.tabs.query({ groupId });
   const data = await getStorage();
 
-  // If windowId is null, remove group from stored group and exit
+  // Detach can race with the Chrome group disappearing. Preserve its history
+  // under the original storage key until attach establishes its new window.
   if (windowId === null) {
-    log('Window ID is null, removing stored group if exists:', groupId);
     const stored = findStoredGroupById(data, groupId);
     if (stored) {
-      stored.windowId = -1; // Mark as no window, should be attached to new new soon after this
-      delete data.windows[stored.windowId]?.groups[stored.groupKey];
+      stored.group.closed = true;
+      stored.group.windowId = -1;
       await setStorage(data);
     }
     return;
   }
+
+  const group = await chrome.tabGroups.get(groupId).catch(() => null);
+  if (!group) return;
+  const tabs = await chrome.tabs.query({ groupId });
 
   // Skip excluded groups/windows before creating or reconciling storage entries.
   if (matchesAny(data.exclusions!.groups, group.title || '') ||

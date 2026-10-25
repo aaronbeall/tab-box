@@ -24,7 +24,7 @@ function worker() {
       get: async id => { const group = groups.find(g => g.id === id); if (!group) throw new Error('No group'); return group },
       query: async query => groups.filter(g => query.windowId === undefined || g.windowId === query.windowId),
     },
-    tabs: { onCreated: event(), onUpdated: event(), onMoved: event(), onDetached: event(), onAttached: event(), onRemoved: event(), query: async query => tabs.filter(t => query.groupId === undefined || t.groupId === query.groupId) },
+    tabs: { get: async id => { const tab = tabs.find(t => t.id === id); if (!tab) throw new Error('No tab'); return { ...tab } }, onCreated: event(), onUpdated: event(), onMoved: event(), onDetached: event(), onAttached: event(), onRemoved: event(), query: async query => tabs.filter(t => query.groupId === undefined || t.groupId === query.groupId) },
     contextMenus: { onClicked: event(), create() {} }, action: { onClicked: event() },
   }
   vm.runInNewContext(source, { chrome, console: { log() {}, error() {} } })
@@ -179,5 +179,32 @@ for (const destination of [-1, 6]) {
     assert.equal(source.tabs.find(t => t.id === 3).closed, true)
     assert.equal(source.tabs.find(t => t.id === 4).closed, false)
     if (destination !== -1) assert.equal(w.raw().windows[1].groups[6].tabs.find(t => t.id === 3).closed, false)
+  })
+}
+
+for (const disappears of [false, true]) {
+  test(`detaching marks old membership closed and retains history (group disappears: ${disappears})`, async () => {
+    const w = worker()
+    await w.update()
+    const data = w.raw()
+    data.windows[1].groups[2].tabs.push({ id: 30, closed: true, title: 'History', url: 'https://history.example/' })
+    if (disappears) w.groups.length = 0
+    w.chrome.tabs.onDetached.listeners[0](3, { oldWindowId: 1, oldPosition: 0 })
+    await w.message({ type: 'getStorage' })
+    const detached = w.raw().windows[1].groups[2]
+    assert.equal(detached.closed, true)
+    assert.equal(detached.windowId, -1)
+    assert.equal(detached.tabs.length, 2)
+    if (!disappears) {
+      w.groups[0].windowId = 5
+      w.tabs[0].windowId = 5
+      w.chrome.tabs.onAttached.listeners[0](3, { newWindowId: 5, newPosition: 0 })
+      await w.message({ type: 'getStorage' })
+      assert.equal(Object.keys(w.raw().windows[1].groups).length, 0)
+      const attached = Object.values(w.raw().windows[5].groups)[0]
+      assert.equal(attached.closed, false)
+      assert.equal(attached.windowId, 5)
+      assert.ok(attached.tabs.some(t => t.url === 'https://history.example/' && t.closed))
+    }
   })
 }

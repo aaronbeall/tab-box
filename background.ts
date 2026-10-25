@@ -56,26 +56,27 @@ function findStoredGroupById(data: StorageData, groupId: number | null): { group
   return null;
 }
 
-// Helper: Find stored group by title
-function findStoredGroupByTitle(data: StorageData, title: string, preferredWindowId?: number): { group: StorageGroup; windowId: number; groupKey: string } | null {
-  let match: { group: StorageGroup; windowId: number; groupKey: string } | null = null;
-
-  for (const wId in data.windows) {
-    for (const gKey in data.windows[wId]?.groups) {
-      const g = data.windows[wId]?.groups[gKey];
-      if (g?.title === title) {
-        const windowId = parseInt(wId);
-        if (preferredWindowId && windowId === preferredWindowId) {
-          return { group: g, windowId, groupKey: gKey };
-        }
-        if (!match) {
-          match = { group: g, windowId, groupKey: gKey };
-        }
-      }
+// Reattach only unbound groups in this window with an unambiguous content match.
+// Titles alone cannot distinguish separate live groups (including unnamed groups).
+async function findStoredGroupForChrome(data: StorageData, group: chrome.tabGroups.TabGroup, tabs: chrome.tabs.Tab[]) {
+  const liveIds = new Set((await chrome.tabGroups.query({})).map(g => g.id));
+  const urls = new Set(tabs.map(t => t.url).filter(Boolean));
+  let best: { group: StorageGroup; windowId: number; groupKey: string } | null = null;
+  let bestScore = 0;
+  let tied = false;
+  for (const [groupKey, candidate] of Object.entries(data.windows[group.windowId]?.groups || {})) {
+    if (liveIds.has(candidate.id) || candidate.title !== (group.title || '')) continue;
+    const storedUrls = new Set(candidate.tabs.filter(t => !t.closed).map(t => t.url));
+    const score = [...urls].filter(url => storedUrls.has(url!)).length;
+    if (score > bestScore) {
+      best = { group: candidate, windowId: group.windowId, groupKey };
+      bestScore = score;
+      tied = false;
+    } else if (score > 0 && score === bestScore) {
+      tied = true;
     }
   }
-  log('findStoredGroupByTitle:', title, 'preferredWindowId:', preferredWindowId, 'found match:', match);
-  return match;
+  return tied ? null : best;
 }
 
 // Helper: Find stored window that best matches chrome window by group names
@@ -469,13 +470,8 @@ async function syncTabGroup(groupId: number, windowId: number | null, updatePosi
 
   // If not found by id, try by title in the same window first (window should exist by this point)
   if (!stored) {
-    stored = findStoredGroupByTitle(data, group.title || '', windowId);
+    stored = await findStoredGroupForChrome(data, group, tabs);
   }
-
-  // If still not found, try by title in any window
-  // if (!stored) {
-  //   stored = findStoredGroupByTitle(data, group.title || '');
-  // }
 
   // Merge tabs: keep existing stored tabs, update or close them, add new ones
   const mergedTabs = stored ? mergeStoredTabs(tabs, stored.group.tabs) : mapTabsToStored(tabs);
@@ -677,7 +673,7 @@ async function focusOrOpenGroup(group: StorageGroup, window: StorageWindow): Pro
 
   // Update stored group id and windowId
   const data = await getStorage();
-  const stored = findStoredGroupById(data, group.id) || findStoredGroupByTitle(data, group.title);
+  const stored = findStoredGroupById(data, group.id);
   if (stored) {
     stored.group.id = newGroupId;
     stored.group.windowId = windowId;

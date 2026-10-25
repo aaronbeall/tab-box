@@ -33,7 +33,7 @@ function worker() {
     chrome.tabGroups.onUpdated.listeners[0](groups[0])
     await message({ type: 'getStorage' }) // FIFO barrier
   }
-  return { message, update, groups, tabs, raw: () => saved }
+  return { message, update, groups, tabs, chrome, seed: data => { saved = structuredClone(data) }, raw: () => saved }
 }
 
 test('worker excludes renamed live groups and resyncs them when rules are removed', async () => {
@@ -94,4 +94,46 @@ test('a group moved into an excluded window is removed from its previous stored 
   await w.update()
   assert.equal(Object.keys(w.raw().windows[1].groups).length, 0)
   assert.equal(Object.keys(w.raw().windows[5].groups).length, 0)
+})
+
+for (const [title, windowId] of [['Research', 1], ['Research', 5], ['', 1]]) {
+  test(`distinct live groups stay separate: title=${JSON.stringify(title)}, window=${windowId}`, async () => {
+    const w = worker()
+    w.groups[0].title = title
+    w.groups.push({ id: 6, windowId, title, color: 'red', collapsed: false })
+    w.tabs.push({ id: 7, windowId, groupId: 6, title: 'Other', url: 'https://other.example/' })
+    await w.message({ type: 'setExclusions', exclusions: { tabs: [], groups: [], windows: [] } })
+    const saved = Object.values(w.raw().windows).flatMap(win => Object.values(win.groups))
+    assert.equal(saved.length, 2)
+    assert.deepEqual(saved.map(g => g.id).sort(), [2, 6])
+    assert.ok(saved.every(g => g.tabs.length === 1 && !g.tabs[0].closed))
+  })
+}
+
+function savedGroup(id, url = 'https://example.com/') {
+  return { id, windowId: 1, closed: true, title: 'Research', color: 'blue', tabs: [
+    { id: id + 100, closed: false, title: 'Saved', url },
+    { id: id + 200, closed: true, title: 'History', url: 'https://history.example/' },
+  ] }
+}
+const savedData = groups => ({ exclusions: { tabs: [], groups: [], windows: [] }, windows: { 1: { id: 1, closed: false, groups } } })
+
+test('reattach an unbound group with matching title and URLs, keeping its history', async () => {
+  const w = worker()
+  w.seed(savedData({ 20: savedGroup(20) }))
+  await w.update()
+  const groups = Object.values(w.raw().windows[1].groups)
+  assert.equal(groups.length, 1)
+  assert.equal(groups[0].id, 2)
+  assert.ok(groups[0].tabs.some(t => t.url === 'https://history.example/' && t.closed))
+})
+
+test('ambiguous or unrelated saved groups are not overwritten by a title match', async () => {
+  for (const candidates of [{ 20: savedGroup(20), 21: savedGroup(21) }, { 20: savedGroup(20, 'https://unrelated.example/') }]) {
+    const w = worker()
+    w.seed(savedData(candidates))
+    await w.update()
+    assert.equal(Object.keys(w.raw().windows[1].groups).length, Object.keys(candidates).length + 1)
+    for (const id of Object.keys(candidates)) assert.equal(w.raw().windows[1].groups[id].id, Number(id))
+  }
 })

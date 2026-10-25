@@ -642,6 +642,7 @@ async function focusOrOpenGroup(group: StorageGroup, window: StorageWindow): Pro
   }
 
   let newGroupId: number;
+  let placeholder: StorageTab | undefined;
   if (createdTabIds.length > 0) {
     newGroupId = await chrome.tabs.group({
       tabIds: createdTabIds,
@@ -658,7 +659,7 @@ async function focusOrOpenGroup(group: StorageGroup, window: StorageWindow): Pro
       await chrome.tabs.update(createdTabIds[0]!, { active: true });
     }
   } else {
-    // Create empty group
+    // Chrome closes empty groups, so retain a real new-tab placeholder.
     const tempTab = await chrome.tabs.create({ windowId, active: false });
     newGroupId = await chrome.tabs.group({
       tabIds: [tempTab.id!],
@@ -668,7 +669,11 @@ async function focusOrOpenGroup(group: StorageGroup, window: StorageWindow): Pro
       title: group.title,
       color: group.color || undefined
     });
-    await chrome.tabs.remove(tempTab.id!);
+    placeholder = {
+      id: tempTab.id!, closed: false, title: tempTab.title || 'New tab',
+      url: tempTab.url || 'chrome://newtab/'
+    };
+    await chrome.tabs.update(tempTab.id!, { active: true });
   }
 
   // Update stored group id and windowId
@@ -676,6 +681,7 @@ async function focusOrOpenGroup(group: StorageGroup, window: StorageWindow): Pro
   const stored = findStoredGroupById(data, group.id);
   if (stored) {
     stored.group.id = newGroupId;
+    stored.group.closed = false;
     stored.group.windowId = windowId;
     // Update tabs: map created tab IDs back to the tabs that were created, keep closed tabs as-is
     let createdIdx = 0;
@@ -688,6 +694,8 @@ async function focusOrOpenGroup(group: StorageGroup, window: StorageWindow): Pro
         return { ...t, closed: true };
       }
     });
+
+    if (placeholder) stored.group.tabs.push(placeholder);
 
     // Move to correct window if needed
     if (stored.windowId !== windowId) {

@@ -208,3 +208,67 @@ for (const disappears of [false, true]) {
     }
   })
 }
+
+function enableRestore(w) {
+  let nextId = 1000
+  w.chrome.windows.update = async id => ({ id })
+  w.chrome.tabs.create = async options => {
+    const tab = { id: nextId++, groupId: -1, title: 'New tab', url: 'chrome://newtab/', ...options }
+    w.tabs.push(tab)
+    return { ...tab }
+  }
+  w.chrome.tabs.update = async (id, options) => {
+    const tab = w.tabs.find(t => t.id === id)
+    if (!tab) throw new Error('No tab')
+    Object.assign(tab, options)
+    return { ...tab }
+  }
+  w.chrome.tabs.group = async ({ tabIds, groupId, createProperties }) => {
+    let group = w.groups.find(g => g.id === groupId)
+    if (groupId !== undefined && !group) throw new Error('No group')
+    if (!group) {
+      group = { id: nextId++, windowId: createProperties.windowId, title: '', color: 'grey', collapsed: false }
+      w.groups.push(group)
+    }
+    for (const id of tabIds) w.tabs.find(t => t.id === id).groupId = group.id
+    return group.id
+  }
+  w.chrome.tabGroups.update = async (id, options) => {
+    const group = w.groups.find(g => g.id === id)
+    if (!group) throw new Error('No group')
+    Object.assign(group, options)
+    return { ...group }
+  }
+  w.chrome.tabs.remove = async id => {
+    const tab = w.tabs.find(t => t.id === id)
+    w.tabs.splice(w.tabs.indexOf(tab), 1)
+    if (!w.tabs.some(t => t.groupId === tab.groupId)) {
+      const group = w.groups.find(g => g.id === tab.groupId)
+      if (group) w.groups.splice(w.groups.indexOf(group), 1)
+    }
+  }
+  w.chrome.tabs.query = async query => w.tabs.filter(t => (query.groupId === undefined || t.groupId === query.groupId) && (!query.url || query.url === t.url))
+}
+
+test('restoring a history-only group keeps a live placeholder and preserves history', async () => {
+  const w = worker()
+  enableRestore(w)
+  w.groups.length = 0
+  w.tabs.length = 0
+  const group = savedGroup(-20)
+  group.tabs.forEach(t => { t.closed = true })
+  w.seed(savedData({ '-20': group }))
+  const win = structuredClone(w.raw().windows[1])
+  const result = await w.message({ type: 'openGroup', group: structuredClone(group), window: win })
+  assert.equal(result.ok, true)
+  assert.ok(w.groups.some(g => g.id === result.groupId), 'restored group must still exist')
+  const saved = Object.values(w.raw().windows[1].groups)[0]
+  assert.equal(saved.closed, false)
+  assert.equal(saved.tabs.filter(t => t.closed).length, 2)
+  const placeholder = saved.tabs.find(t => !t.closed)
+  assert.equal(placeholder.url, 'chrome://newtab/')
+  assert.ok(w.tabs.some(t => t.id === placeholder.id && t.groupId === result.groupId))
+  const tabResult = await w.message({ type: 'openTab', tab: saved.tabs.find(t => t.closed), group: saved, window: w.raw().windows[1] })
+  assert.equal(tabResult.ok, true)
+  assert.ok(w.tabs.some(t => t.id === tabResult.tabId && t.groupId === result.groupId && t.url === 'https://example.com/'))
+})

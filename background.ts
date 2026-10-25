@@ -898,7 +898,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 chrome.contextMenus.onClicked.addListener(async (info) => {
   if (info.menuItemId === 'resync-all') {
     log('Resyncing all data via context menu');
-    await reconcileAllWindows();
+    queue(() => reconcileAllWindows());
   }
 });
 

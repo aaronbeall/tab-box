@@ -137,3 +137,30 @@ test('ambiguous or unrelated saved groups are not overwritten by a title match',
     for (const id of Object.keys(candidates)) assert.equal(w.raw().windows[1].groups[id].id, Number(id))
   }
 })
+
+test('context-menu refresh serializes with edits and cannot overwrite a saved rename', async () => {
+  const w = worker()
+  await w.update()
+  const get = w.chrome.storage.local.get
+  let release, started
+  const gate = new Promise(resolve => { release = resolve })
+  const entered = new Promise(resolve => { started = resolve })
+  let pause = true
+  w.chrome.storage.local.get = async (...args) => {
+    const snapshot = await get(...args)
+    if (pause) { pause = false; started(); await gate }
+    return snapshot
+  }
+  const refresh = w.chrome.contextMenus.onClicked.listeners[0]({ menuItemId: 'resync-all' })
+  await entered
+  let editFinished = false
+  const edit = w.message({ type: 'setWindowName', windowKey: '1', name: 'Keep this name' }).then(response => { editFinished = true; return response })
+  await new Promise(resolve => setImmediate(resolve))
+  const editWaitedForRefresh = !editFinished
+  release()
+  await refresh
+  assert.equal((await edit).ok, true)
+  await w.message({ type: 'getStorage' })
+  assert.equal(w.raw().windows[1].name, 'Keep this name')
+  assert.equal(editWaitedForRefresh, true)
+})

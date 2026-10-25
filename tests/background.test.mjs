@@ -7,6 +7,7 @@ const source = buildSync({ entryPoints: ['background.ts'], bundle: true, write: 
 const event = () => ({ listeners: [], addListener(fn) { this.listeners.push(fn) } })
 function worker({ newSession = false, sessionValues } = {}) {
   const session = sessionValues ?? (newSession ? {} : { tabboxSessionInitialized: true })
+  const logs = []
   let saved = { windows: {} }
   const groups = [{ id: 2, windowId: 1, title: 'Research', color: 'blue', collapsed: false }]
   const tabs = [{ id: 3, windowId: 1, groupId: 2, title: 'Example', url: 'https://example.com/' }]
@@ -28,13 +29,13 @@ function worker({ newSession = false, sessionValues } = {}) {
     tabs: { get: async id => { const tab = tabs.find(t => t.id === id); if (!tab) throw new Error('No tab'); return { ...tab } }, onCreated: event(), onUpdated: event(), onMoved: event(), onDetached: event(), onAttached: event(), onRemoved: event(), query: async query => tabs.filter(t => (query.groupId === undefined || t.groupId === query.groupId) && (query.windowId === undefined || t.windowId === query.windowId)) },
     contextMenus: { onClicked: event(), create() {} }, action: { onClicked: event() },
   }
-  vm.runInNewContext(source, { chrome, console: { log() {}, error() {} } })
+  vm.runInNewContext(source, { chrome, console: { log: (...args) => logs.push(args), error() {} } })
   const message = msg => new Promise(resolve => chrome.runtime.onMessage.listeners[0](msg, {}, resolve))
   const update = async () => {
     chrome.tabGroups.onUpdated.listeners[0](groups[0])
     await message({ type: 'getStorage' }) // FIFO barrier
   }
-  return { message, update, groups, tabs, chrome, session, seed: data => { saved = structuredClone(data) }, raw: () => saved }
+  return { message, update, groups, tabs, chrome, session, logs, seed: data => { saved = structuredClone(data) }, raw: () => saved }
 }
 
 test('worker excludes renamed live groups and resyncs them when rules are removed', async () => {
@@ -366,4 +367,10 @@ test('removing a moved tab syncs its live group instead of an old history entry'
   w.chrome.tabs.onRemoved.listeners[0](3, { windowId: 1, isWindowClosing: false })
   await w.message({ type: 'getStorage' })
   assert.equal(w.raw().windows[1].groups[6].tabs.find(t => t.id === 3).closed, true)
+})
+
+test('normal synchronization does not log browsing URLs or saved group contents', async () => {
+  const w = worker()
+  await w.update()
+  assert.equal(w.logs.length, 0)
 })

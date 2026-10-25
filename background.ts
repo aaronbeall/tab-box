@@ -44,7 +44,7 @@ const log = (...args: any[]) => {
   }
 };
 
-const DEBUG = true;
+const DEBUG = false;
 
 async function getStorage(): Promise<StorageData> {
   await ensureBrowserSession();

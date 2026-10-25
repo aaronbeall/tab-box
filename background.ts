@@ -143,7 +143,7 @@ function findStoredGroupByTabId(data: StorageData, tabId: number): StorageGroup 
   for (const wId in data.windows) {
     for (const gKey in data.windows[wId]?.groups) {
       const g = data.windows[wId]?.groups[gKey];
-      if (g?.tabs.some(t => t.id === tabId)) {
+      if (g && !g.closed && g.tabs.some(t => t.id === tabId && !t.closed)) {
         return g;
       }
     }

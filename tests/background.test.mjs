@@ -351,3 +351,19 @@ test('browser restart reattaches matching content while preserving window name a
   assert.equal(group.closed, false)
   assert.ok(group.tabs.some(t => t.closed && t.url === 'https://history.example/'))
 })
+
+test('removing a moved tab syncs its live group instead of an old history entry', async () => {
+  const w = worker()
+  w.tabs.push({ id: 4, windowId: 1, groupId: 2, title: 'Stays', url: 'https://stays.example/' })
+  w.groups.push({ id: 6, windowId: 1, title: 'Destination', color: 'red', collapsed: false })
+  w.tabs.push({ id: 7, windowId: 1, groupId: 6, title: 'Stays in destination', url: 'https://destination.example/' })
+  await w.message({ type: 'setExclusions', exclusions: { tabs: [], groups: [], windows: [] } })
+  w.tabs[0].groupId = 6
+  w.chrome.tabs.onUpdated.listeners[0](3, { groupId: 6 }, w.tabs[0])
+  await w.message({ type: 'getStorage' })
+  assert.equal(w.raw().windows[1].groups[2].tabs.find(t => t.id === 3).closed, true)
+  w.tabs.splice(w.tabs.findIndex(t => t.id === 3), 1)
+  w.chrome.tabs.onRemoved.listeners[0](3, { windowId: 1, isWindowClosing: false })
+  await w.message({ type: 'getStorage' })
+  assert.equal(w.raw().windows[1].groups[6].tabs.find(t => t.id === 3).closed, true)
+})

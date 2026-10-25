@@ -6,6 +6,37 @@ import type { StorageData, StorageWindow, StorageGroup, StorageTab } from './web
 import { applyExclusions, createBackup, importBackup, matchesAny, validateExclusions } from './web/src/data'
 
 const STORAGE_KEY = "tabbox";
+const SESSION_KEY = "tabboxSessionInitialized";
+let sessionReady: Promise<void> | undefined;
+
+function ensureBrowserSession(): Promise<void> {
+  if (!sessionReady) {
+    sessionReady = (async () => {
+      const session = await chrome.storage.session.get(SESSION_KEY);
+      if (session[SESSION_KEY]) return;
+      const result = await chrome.storage.local.get(STORAGE_KEY);
+      const data = result[STORAGE_KEY] as StorageData | undefined;
+      if (data) {
+        let id = -2;
+        const detached: StorageData = { ...data, windows: {} };
+        for (const win of Object.values(data.windows)) {
+          const windowId = id--;
+          const groups: Record<string, StorageGroup> = {};
+          for (const group of Object.values(win.groups)) {
+            const groupId = id--;
+            groups[groupId] = { ...group, id: groupId, windowId, closed: true,
+              tabs: group.tabs.map(tab => ({ ...tab, id: id-- })) };
+          }
+          detached.windows[windowId] = { ...win, id: windowId, closed: true, groups };
+        }
+        await chrome.storage.local.set({ [STORAGE_KEY]: detached });
+      }
+      // Session storage survives worker suspension, but clears on browser restart.
+      await chrome.storage.session.set({ [SESSION_KEY]: true });
+    })().catch(error => { sessionReady = undefined; throw error; });
+  }
+  return sessionReady;
+}
 
 const log = (...args: any[]) => {
   if (DEBUG) {
@@ -16,6 +47,7 @@ const log = (...args: any[]) => {
 const DEBUG = true;
 
 async function getStorage(): Promise<StorageData> {
+  await ensureBrowserSession();
   const result = await chrome.storage.local.get(STORAGE_KEY);
   return applyExclusions(result[STORAGE_KEY] || { windows: {} }, true);
 }
@@ -79,38 +111,31 @@ async function findStoredGroupForChrome(data: StorageData, group: chrome.tabGrou
   return tied ? null : best;
 }
 
-// Helper: Find stored window that best matches chrome window by group names
+// Match archived windows by group names AND tab content. An ambiguous name-only
+// match must never attach a saved window to unrelated browsing after restart.
 async function findStoredWindowByGroups(data: StorageData, chromeWindowId: number): Promise<{ window: StorageWindow; storedWindowId: number } | null> {
-  log('Finding stored window matching Chrome window:', chromeWindowId);
-
-  // Get Chrome tab group titles in this window
   const chromeGroups = await chrome.tabGroups.query({ windowId: chromeWindowId });
-  const chromeGroupTitles = chromeGroups.map(g => g.title ?? "").filter(Boolean);
-  if (chromeGroupTitles.length === 0) return null;
-
-  log('Find stored window by Chrome group titles:', chromeGroupTitles);
-  let bestMatch: { window: StorageWindow; storedWindowId: number; score: number } | null = null;
-
-  // Filter out stored windows that are already attached to chrome windows
-  const chromeWindows = await chrome.windows.getAll();
-
-  // Check each stored window for matching group titles
-  for (const wId in data.windows) {
-    if (chromeWindows.some(cw => cw.id === data.windows[wId]?.id)) continue; // Skip stored windows already attached to Chrome windows
-    const storedWindow = data.windows[wId];
-    if (storedWindow) {
-      const storedGroupTitles = Object.values(storedWindow.groups).map(g => g.title).filter(Boolean);
-
-      // Count matching group titles
-      const matches = chromeGroupTitles.filter(t => storedGroupTitles.includes(t)).length;
-      if (matches > 0 && (!bestMatch || matches > bestMatch.score)) {
-        bestMatch = { window: storedWindow, storedWindowId: parseInt(wId), score: matches };
-      }
+  const titles = new Set(chromeGroups.map(g => g.title || ''));
+  const chromeTabs = await chrome.tabs.query({ windowId: chromeWindowId });
+  const urls = new Set(chromeTabs.filter(t => chromeGroups.some(g => g.id === t.groupId)).map(t => t.url).filter(Boolean));
+  const liveWindowIds = new Set((await chrome.windows.getAll()).map(win => win.id));
+  let best: { window: StorageWindow; storedWindowId: number } | null = null;
+  let bestScore = 0;
+  let tied = false;
+  for (const [key, win] of Object.entries(data.windows)) {
+    if (liveWindowIds.has(win.id)) continue;
+    const storedUrls = new Set(Object.values(win.groups).filter(g => titles.has(g.title))
+      .flatMap(g => g.tabs.filter(t => !t.closed).map(t => t.url)));
+    const score = [...urls].filter(url => storedUrls.has(url!)).length;
+    if (score > bestScore) {
+      best = { window: win, storedWindowId: Number(key) };
+      bestScore = score;
+      tied = false;
+    } else if (score > 0 && score === bestScore) {
+      tied = true;
     }
   }
-
-  log('Best matching stored window:', bestMatch);
-  return bestMatch ? { window: bestMatch.window, storedWindowId: bestMatch.storedWindowId } : null;
+  return tied ? null : best;
 }
 
 // Helper: Find stored group containing a tab by tab ID
@@ -537,7 +562,7 @@ async function syncTabGroup(groupId: number, windowId: number | null, updatePosi
 
 async function focusOrOpenWindow(window: StorageWindow, restoreTabs: boolean = false): Promise<number> {
   // If window.id is provided, try to focus that window
-  if (window.id) {
+  if (!window.closed && window.id >= 0) {
     try {
       await chrome.windows.get(window.id);
       await chrome.windows.update(window.id, { focused: true });
@@ -612,9 +637,10 @@ async function focusOrOpenWindow(window: StorageWindow, restoreTabs: boolean = f
 
 async function focusOrOpenGroup(group: StorageGroup, window: StorageWindow): Promise<number> {
   // If group.id is provided, try to focus that group
-  if (group.id) {
+  if (!group.closed && !window.closed && group.id >= 0) {
     try {
       const chromeGroup = await chrome.tabGroups.get(group.id);
+      if (chromeGroup.windowId !== window.id) throw new Error("Group belongs to another window");
       const tabs = await chrome.tabs.query({ groupId: chromeGroup.id });
       await chrome.windows.update(chromeGroup.windowId, { focused: true });
       if (tabs.length > 0) {
@@ -722,9 +748,12 @@ async function focusOrOpenGroup(group: StorageGroup, window: StorageWindow): Pro
 
 async function focusOrOpenTab(tab: StorageTab, group: StorageGroup, window: StorageWindow): Promise<number> {
   // If tab.id is provided, try to focus that tab
-  if (tab.id) {
+  if (!tab.closed && !group.closed && !window.closed && tab.id >= 0) {
     try {
       const chromeTab = await chrome.tabs.get(tab.id);
+      if (chromeTab.groupId !== group.id || chromeTab.windowId !== window.id || chromeTab.url !== tab.url) {
+        throw new Error("Tab no longer matches the saved entry");
+      }
       await chrome.windows.update(chromeTab.windowId!, { focused: true });
       await chrome.tabs.update(chromeTab.id!, { active: true });
       return chromeTab.id!;

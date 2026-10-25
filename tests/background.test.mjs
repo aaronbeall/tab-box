@@ -5,12 +5,13 @@ import { buildSync } from 'esbuild'
 
 const source = buildSync({ entryPoints: ['background.ts'], bundle: true, write: false, format: 'iife', platform: 'browser' }).outputFiles[0].text
 const event = () => ({ listeners: [], addListener(fn) { this.listeners.push(fn) } })
-function worker() {
+function worker({ newSession = false, sessionValues } = {}) {
+  const session = sessionValues ?? (newSession ? {} : { tabboxSessionInitialized: true })
   let saved = { windows: {} }
   const groups = [{ id: 2, windowId: 1, title: 'Research', color: 'blue', collapsed: false }]
   const tabs = [{ id: 3, windowId: 1, groupId: 2, title: 'Example', url: 'https://example.com/' }]
   const chrome = {
-    storage: { local: {
+    storage: { session: { get: async () => structuredClone(session), set: async values => Object.assign(session, values) }, local: {
       get: async () => ({ tabbox: structuredClone(saved) }),
       set: async ({ tabbox }) => { saved = structuredClone(tabbox) },
     } },
@@ -24,7 +25,7 @@ function worker() {
       get: async id => { const group = groups.find(g => g.id === id); if (!group) throw new Error('No group'); return group },
       query: async query => groups.filter(g => query.windowId === undefined || g.windowId === query.windowId),
     },
-    tabs: { get: async id => { const tab = tabs.find(t => t.id === id); if (!tab) throw new Error('No tab'); return { ...tab } }, onCreated: event(), onUpdated: event(), onMoved: event(), onDetached: event(), onAttached: event(), onRemoved: event(), query: async query => tabs.filter(t => query.groupId === undefined || t.groupId === query.groupId) },
+    tabs: { get: async id => { const tab = tabs.find(t => t.id === id); if (!tab) throw new Error('No tab'); return { ...tab } }, onCreated: event(), onUpdated: event(), onMoved: event(), onDetached: event(), onAttached: event(), onRemoved: event(), query: async query => tabs.filter(t => (query.groupId === undefined || t.groupId === query.groupId) && (query.windowId === undefined || t.windowId === query.windowId)) },
     contextMenus: { onClicked: event(), create() {} }, action: { onClicked: event() },
   }
   vm.runInNewContext(source, { chrome, console: { log() {}, error() {} } })
@@ -33,7 +34,7 @@ function worker() {
     chrome.tabGroups.onUpdated.listeners[0](groups[0])
     await message({ type: 'getStorage' }) // FIFO barrier
   }
-  return { message, update, groups, tabs, chrome, seed: data => { saved = structuredClone(data) }, raw: () => saved }
+  return { message, update, groups, tabs, chrome, session, seed: data => { saved = structuredClone(data) }, raw: () => saved }
 }
 
 test('worker excludes renamed live groups and resyncs them when rules are removed', async () => {
@@ -271,4 +272,82 @@ test('restoring a history-only group keeps a live placeholder and preserves hist
   const tabResult = await w.message({ type: 'openTab', tab: saved.tabs.find(t => t.closed), group: saved, window: w.raw().windows[1] })
   assert.equal(tabResult.ok, true)
   assert.ok(w.tabs.some(t => t.id === tabResult.tabId && t.groupId === result.groupId && t.url === 'https://example.com/'))
+})
+
+test('new browser session detaches persisted IDs before reconciling reused live IDs', async () => {
+  const w = worker({ newSession: true })
+  w.seed(savedData({ 2: { ...savedGroup(2), closed: false, tabs: [
+    { id: 3, closed: false, title: 'Saved page', url: 'https://saved.example/' },
+  ] } }))
+  const response = await w.message({ type: 'getStorage' })
+  const archivedWindow = Object.values(response.data.windows)[0]
+  const archivedGroup = Object.values(archivedWindow.groups)[0]
+  assert.ok(archivedWindow.id < -1)
+  assert.ok(archivedGroup.id < -1)
+  assert.ok(archivedGroup.tabs[0].id < -1)
+  assert.equal(archivedWindow.closed, true)
+  assert.equal(archivedGroup.closed, true)
+  assert.equal(archivedGroup.tabs[0].closed, false, 'preserve which tabs to restore')
+  w.chrome.runtime.onStartup.listeners[0]()
+  await w.message({ type: 'getStorage' })
+  const windows = Object.values(w.raw().windows)
+  assert.equal(windows.length, 2, 'unrelated live window must not claim an archived window by group title')
+  const preserved = windows.find(win => win.id === archivedWindow.id)
+  assert.equal(Object.values(preserved.groups)[0].tabs[0].url, 'https://saved.example/')
+  assert.equal(w.raw().windows[1].groups[2].tabs[0].url, 'https://example.com/')
+})
+
+test('service-worker restart in the same browser session retains current live bindings', async () => {
+  const first = worker({ newSession: true })
+  await first.update()
+  const restarted = worker({ sessionValues: first.session })
+  restarted.seed(first.raw())
+  await restarted.message({ type: 'getStorage' })
+  assert.deepEqual(restarted.raw(), first.raw())
+  assert.equal(restarted.raw().windows[1].groups[2].id, 2)
+})
+
+test('a closed history tab cannot focus an unrelated same-ID live tab', async () => {
+  const w = worker()
+  enableRestore(w)
+  await w.update()
+  const win = structuredClone(w.raw().windows[1])
+  const group = win.groups[2]
+  const tab = { id: 3, closed: true, title: 'History', url: 'https://history.example/' }
+  group.tabs.push(tab)
+  w.seed({ ...w.raw(), windows: { 1: win } })
+  const response = await w.message({ type: 'openTab', tab, group, window: win })
+  assert.equal(response.ok, true)
+  assert.notEqual(response.tabId, 3)
+  assert.equal(w.tabs.find(t => t.id === response.tabId).url, tab.url)
+  assert.equal(w.tabs.find(t => t.id === 3).url, 'https://example.com/')
+})
+
+test('a closed group cannot focus an unrelated same-ID live group', async () => {
+  const w = worker()
+  enableRestore(w)
+  const group = { ...savedGroup(2), tabs: [{ id: 30, closed: false, title: 'Saved', url: 'https://saved.example/' }] }
+  w.seed(savedData({ 2: group }))
+  const response = await w.message({ type: 'openGroup', group, window: structuredClone(w.raw().windows[1]) })
+  assert.equal(response.ok, true)
+  assert.notEqual(response.groupId, 2)
+  assert.equal(w.groups.find(g => g.id === 2).title, 'Research')
+  assert.ok(w.tabs.some(t => t.groupId === response.groupId && t.url === 'https://saved.example/'))
+})
+
+test('browser restart reattaches matching content while preserving window name and history', async () => {
+  const w = worker({ newSession: true })
+  const data = savedData({ 20: savedGroup(20) })
+  data.windows[1].name = 'Work'
+  w.seed(data)
+  w.chrome.runtime.onStartup.listeners[0]()
+  await w.message({ type: 'getStorage' })
+  assert.equal(Object.keys(w.raw().windows).length, 1)
+  const win = w.raw().windows[1]
+  assert.equal(win.name, 'Work')
+  assert.equal(win.closed, false)
+  const group = Object.values(win.groups)[0]
+  assert.equal(group.id, 2)
+  assert.equal(group.closed, false)
+  assert.ok(group.tabs.some(t => t.closed && t.url === 'https://history.example/'))
 })

@@ -164,3 +164,20 @@ test('context-menu refresh serializes with edits and cannot overwrite a saved re
   assert.equal(w.raw().windows[1].name, 'Keep this name')
   assert.equal(editWaitedForRefresh, true)
 })
+
+for (const destination of [-1, 6]) {
+  test(`membership-only change updates source and destination groups (${destination})`, async () => {
+    const w = worker()
+    w.tabs.push({ id: 4, windowId: 1, groupId: 2, title: 'Stays', url: 'https://stays.example/' })
+    w.groups.push({ id: 6, windowId: 1, title: 'Destination', color: 'red', collapsed: false })
+    w.tabs.push({ id: 7, windowId: 1, groupId: 6, title: 'Destination tab', url: 'https://destination.example/' })
+    await w.message({ type: 'setExclusions', exclusions: { tabs: [], groups: [], windows: [] } })
+    w.tabs[0].groupId = destination
+    w.chrome.tabs.onUpdated.listeners[0](3, { groupId: destination }, w.tabs[0])
+    await w.message({ type: 'getStorage' })
+    const source = w.raw().windows[1].groups[2]
+    assert.equal(source.tabs.find(t => t.id === 3).closed, true)
+    assert.equal(source.tabs.find(t => t.id === 4).closed, false)
+    if (destination !== -1) assert.equal(w.raw().windows[1].groups[6].tabs.find(t => t.id === 3).closed, false)
+  })
+}

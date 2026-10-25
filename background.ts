@@ -1002,7 +1002,19 @@ chrome.tabs.onCreated.addListener(async (tab) => {
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   queue(async () => {
     log('Tab updated:', tabId, 'groupId:', tab.groupId);
-    if (tab.groupId && tab.groupId !== -1 && (changeInfo.url || changeInfo.title)) {
+    if (changeInfo.groupId !== undefined) {
+      const data = await getStorage();
+      // A move event may have already synced the destination. Update every former
+      // live membership so neither event ordering nor an old history entry hides it.
+      for (const win of Object.values(data.windows)) {
+        for (const group of Object.values(win.groups)) {
+          if (!group.closed && group.id !== tab.groupId && group.tabs.some(t => t.id === tabId && !t.closed)) {
+            await syncTabGroup(group.id, group.windowId);
+          }
+        }
+      }
+    }
+    if (tab.groupId && tab.groupId !== -1 && (changeInfo.groupId !== undefined || changeInfo.url || changeInfo.title)) {
       await syncTabGroup(tab.groupId, tab.windowId);
     }
   });

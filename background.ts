@@ -3,6 +3,8 @@
 
 import type { StorageData, StorageWindow, StorageGroup, StorageTab } from './web/src/types'
 
+import { applyExclusions, createBackup, importBackup, matchesAny, validateExclusions } from './web/src/data'
+
 const STORAGE_KEY = "tabbox";
 
 const log = (...args: any[]) => {
@@ -15,11 +17,11 @@ const DEBUG = true;
 
 async function getStorage(): Promise<StorageData> {
   const result = await chrome.storage.local.get(STORAGE_KEY);
-  return result[STORAGE_KEY] || { windows: {} };
+  return applyExclusions(result[STORAGE_KEY] || { windows: {} }, true);
 }
 
 async function setStorage(data: StorageData): Promise<void> {
-  await chrome.storage.local.set({ [STORAGE_KEY]: data });
+  await chrome.storage.local.set({ [STORAGE_KEY]: applyExclusions(data, true) });
   // Notify listeners
   chrome.runtime.sendMessage({ type: "storageChanged" }).catch(() => { });
 }
@@ -279,7 +281,7 @@ async function reconcileAllWindows() {
   // Cleanup empty windows
   for (const wId in data.windows) {
     const w = data.windows[wId];
-    if (w && Object.keys(w.groups).length === 0) {
+    if (w && Object.keys(w.groups).length === 0 && !matchesAny(data.exclusions!.windows, w.name || '')) {
       delete data.windows[wId];
     }
   }
@@ -439,6 +441,17 @@ async function syncTabGroup(groupId: number, windowId: number | null, updatePosi
     if (stored) {
       stored.windowId = -1; // Mark as no window, should be attached to new new soon after this
       delete data.windows[stored.windowId]?.groups[stored.groupKey];
+      await setStorage(data);
+    }
+    return;
+  }
+
+  // Skip excluded groups/windows before creating or reconciling storage entries.
+  if (matchesAny(data.exclusions!.groups, group.title || '') ||
+      matchesAny(data.exclusions!.windows, data.windows[windowId]?.name || '')) {
+    const stored = findStoredGroupById(data, groupId);
+    if (stored) {
+      delete data.windows[stored.windowId]!.groups[stored.groupKey];
       await setStorage(data);
     }
     return;
@@ -775,9 +788,22 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       } else if (msg && msg.type === "getFocusedWindowId") {
         const current = await chrome.windows.getLastFocused({ populate: false });
         sendResponse({ ok: true, windowId: current.id });
+      } else if (msg && msg.type === "exportBackup") {
+        sendResponse({ ok: true, backup: createBackup(await getStorage()) });
+      } else if (msg && msg.type === "importBackup" && typeof msg.text === "string") {
+        const data = importBackup(await getStorage(), msg.text, msg.importRules === true);
+        await setStorage(data);
+        sendResponse({ ok: true });
+      } else if (msg && msg.type === "setExclusions") {
+        const exclusions = validateExclusions(msg.exclusions);
+        const data = await getStorage();
+        data.exclusions = exclusions;
+        await setStorage(data);
+        await reconcileAllWindows();
+        sendResponse({ ok: true });
       } else if (msg && msg.type === "getStorage") {
         const data = await getStorage();
-        sendResponse({ ok: true, data });
+        sendResponse({ ok: true, data: applyExclusions(data) });
       } else if (msg && msg.type === "closeGroup" && msg.groupId) {
         try {
           const tabs = await chrome.tabs.query({ groupId: msg.groupId });
@@ -836,7 +862,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         const data = await getStorage();
         const group = data.windows[msg.windowKey]?.groups[msg.groupKey]
         if (group) {
-          if (msg.tabId > -1) {
+          if (Number.isInteger(msg.tabId)) {
             group.tabs = group.tabs.filter(t => t.id !== msg.tabId);
           } else if (msg.tabUrl) {
             let removed = false;

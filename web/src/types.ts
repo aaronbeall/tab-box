@@ -40,7 +40,14 @@ export interface StorageWindow {
 /**
  * Complete storage data structure.
  */
+export interface SyncExclusions {
+  tabs: string[]; // Match tab title or URL
+  groups: string[]; // Match group title
+  windows: string[]; // Match Tab Box window name
+}
+
 export interface StorageData {
+  exclusions?: SyncExclusions;
   windows: Record<string, StorageWindow>; // keyed by window ID
 }
 

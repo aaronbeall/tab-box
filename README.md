@@ -14,6 +14,8 @@ A side panel extension to persist and manage tab groups and windows in a vertica
 - Closing a tab group does not remove it from Tab Box
 - Closing a tab in a group keeps in group-level history in Tab Box
 - Clicking a tab group in Tab Box focuses it, or re-opens it in the window it was in
+- Configurable sync exclusions for tab titles/URLs, group names, and Tab Box window names
+- JSON export/import for transferring saved groups and history to another machine
 
 ## Install (Unpacked)
 
@@ -30,10 +32,34 @@ A side panel extension to persist and manage tab groups and windows in a vertica
 
 ## Notes
 
-- Tihs extension syncs tab state is stored in `chrome.storage.local` API
+- Tab state is stored locally using `chrome.storage.local`; automatic account/device sync is not provided.
 - On browser or window restart, restored tabs and groups get new Chrome IDs, so Tab Box must do a name based reconciliation with stored data -- duplicate group names can cause problems
 - Chrome events are not always completely reliable, use right-click on the extension icon and "Refresh Side Panel" to attempt to resync
 - This extension uses Manifest V3 and the Side Panel API with a React + Tailwind UI built via Vite.
+
+## Exclusions and backups
+
+Click the **gear icon** beside search to open Settings. Use **Exclusions** to edit rules or **Backups** to export and import.
+
+Exclusions use one pattern per line, ignore case, and match an entire title, URL, or name. `*` matches any text, and `?` matches one character. For substring matching, use `*private*`. Tab rules match titles or URLs; group rules exclude the group and all its history; window rules match names you assign inside Tab Box. Ungrouped tabs are still outside Tab Box's existing scope.
+
+Defaults exclude `Claude`, `Claude in Chrome*`, and Claude extension pages (`chrome-extension://fcoeoabgfenejglbffodgkkbkcdhcgfn/*`). They target automation markers, including the user's reported Claude group; Chrome does not expose a general “AI controlled” flag. [Claude documents its use of separate tab groups](https://support.claude.com/en/articles/12012173-get-started-with-claude-in-chrome). Customize the patterns for other agents. A personal tab/group/window using a matching name is also excluded; ordinary Claude website URLs are not excluded by domain.
+
+**Saving rules removes matching saved entries and history.** Browser tabs remain open. Export a backup first if you want to keep that history. Removing a rule allows currently open browser groups to sync again, but does not recover removed history. An excluded window's name and ID are retained internally with no groups, so later events keep it excluded; this metadata is omitted from the panel and exports. Window-name rules apply to the Tab Box name, not Chrome's active-tab title.
+
+**Export backup** downloads versioned JSON with saved windows, groups, tabs, history, and rules, after applying exclusions. It includes browsing URLs. Transfer the file to the other machine, load Tab Box, and choose **Import backup**. Import validates the complete file before saving and adds windows under **Closed Windows** without opening tabs. Existing entries are kept. All imported IDs are reassigned, so they cannot point at unrelated live tabs on the destination machine. Expand Closed Windows and click a group to restore it; history remains available separately. Re-importing the same file adds another copy.
+
+Imports use the destination's exclusions by default. Select **Also replace exclusions with rules from the backup** to transfer rules too; matching existing saved data will then be removed. Backups are limited to 10 MB and 50,000 imported items. Export/import is a manual transfer, not continuous cross-device synchronization.
+
+## Verification
+
+```bash
+npm test
+npm run typecheck
+npm run build
+```
+
+Tests cover pattern matching, defaults, history filtering, window exclusion persistence, live group changes, backup validation, portable IDs, and queued worker operations using a mocked Chrome API. Reload the unpacked extension after building. See [REVIEW.md](REVIEW.md) for suggested performance and correctness fixes that have not been implemented.
 
 ## Todo
 
@@ -43,7 +69,7 @@ A side panel extension to persist and manage tab groups and windows in a vertica
   - [ ] Expand groups by default
   - [ ] Expand closed groups by default
   - [ ] Sync group expand/collapse from panel
-- [ ] Export/Import
+- [x] Export/Import
 - [ ] Account data sync
 - [x] Collapsable groups
 - [x] Sync group collapsed state

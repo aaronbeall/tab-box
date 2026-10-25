@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { Settings } from './components/Settings'
 import Icon128 from './assets/icon-128.png'
-import { MdInfo, MdSearch } from 'react-icons/md';
+import { MdInfo, MdSearch, MdSettings } from 'react-icons/md';
 import { EditableName } from './components/EditableName'
 import { Switch } from './components/Switch';
 import { CollapsableHeader } from './components/CollapsableHeader';
@@ -38,6 +39,8 @@ async function buildModel(): Promise<WindowItem[]> {
 }
 
 export default function Panel() {
+  const settingsButton = useRef<HTMLButtonElement>(null)
+  const [showSettings, setShowSettings] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [model, setModel] = useState<WindowItem[]>([])
   const [search, setSearch] = useState('')
@@ -214,6 +217,13 @@ export default function Panel() {
     await chrome.runtime.sendMessage({ type: 'setWindowName', windowKey: w.key, name })
   }
 
+  if (showSettings) {
+    return <Settings onClose={() => {
+      setShowSettings(false)
+      requestAnimationFrame(() => settingsButton.current?.focus())
+    }} />
+  }
+
   if (isLoading) {
     return (
       <div className="flex flex-col h-screen bg-white dark:bg-zinc-900 text-gray-900 dark:text-gray-100">
@@ -232,7 +242,8 @@ export default function Panel() {
   return (
     <div className="flex flex-col h-screen bg-blue-50 dark:bg-zinc-900 text-gray-900 dark:text-gray-100">
       <header className="p-2 border-b border-gray-200 dark:border-zinc-800">
-        <div className="relative">
+        <div className="flex items-center gap-2">
+        <div className="relative min-w-0 flex-1">
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -241,6 +252,8 @@ export default function Panel() {
             type="search"
           />
           <MdSearch size={16} className="text-gray-500 dark:text-gray-400 pointer-events-none absolute top-3 left-3" />
+        </div>
+        <button ref={settingsButton} aria-label="Open settings" title="Settings" onClick={() => setShowSettings(true)} className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-gray-500 dark:text-gray-400 hover:bg-blue-100 dark:hover:bg-zinc-800 hover:text-gray-900 dark:hover:text-gray-100 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"><MdSettings size={20} /></button>
         </div>
         {q && (
           <div className="mt-2 flex flex-col gap-2">
